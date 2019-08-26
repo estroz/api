@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/dweepgogia/new-manifest-verification/cmd"
+	"github.com/operator-framework/api/cmd"
 )
 
 func main() {
