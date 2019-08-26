@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/dweepgogia/new-manifest-verification/pkg/validate/validator"
+	"github.com/operator-framework/api/pkg/validate/validator"
 )
 
 func Validate(v validator.Validator) (manifestResult validator.ManifestResult) {

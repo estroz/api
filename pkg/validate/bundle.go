@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/dweepgogia/new-manifest-verification/pkg/validate/validator"
+	"github.com/operator-framework/api/pkg/validate/validator"
 	"github.com/ghodss/yaml"
 	"github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1"
 	"github.com/operator-framework/operator-lifecycle-manager/pkg/controller/registry"

@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/dweepgogia/new-manifest-verification/pkg/validate"
+	"github.com/operator-framework/api/pkg/validate"
 	"github.com/spf13/cobra"
 )
 

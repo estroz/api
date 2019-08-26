@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dweepgogia/new-manifest-verification/pkg/validate/validator"
+	"github.com/operator-framework/api/pkg/validate/validator"
 	"github.com/ghodss/yaml"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"

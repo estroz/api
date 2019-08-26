@@ -1,4 +1,4 @@
-module github.com/dweepgogia/new-manifest-verification
+module github.com/operator-framework/api
 
 go 1.12
 

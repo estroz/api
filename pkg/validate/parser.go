@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dweepgogia/new-manifest-verification/pkg/validate/validator"
+	"github.com/operator-framework/api/pkg/validate/validator"
 	"github.com/operator-framework/operator-lifecycle-manager/pkg/controller/registry"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/yaml"
