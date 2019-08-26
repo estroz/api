@@ -3,7 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/dweepgogia/new-manifest-verification/pkg/validate"
+	"github.com/operator-framework/api/pkg/manifests"
+
 	"github.com/spf13/cobra"
 )
 
@@ -19,12 +20,9 @@ var verifyCmd = &cobra.Command{
 }
 
 func verifyFunc(cmd *cobra.Command, args []string) {
-
 	if len(args) != 1 {
 		fmt.Printf("command %s requires exactly one argument", cmd.CommandPath())
 	}
 
-	manifestDirectory := args[0]
-
-	_ = validate.ValidateManifest(manifestDirectory)
+	manifests.GetManifestsDir(args[0])
 }
