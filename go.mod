@@ -30,6 +30,7 @@ require (
 	github.com/spf13/cobra v0.0.5
 	google.golang.org/genproto v0.0.0-20181016170114-94acd270e44e // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/yaml.v2 v2.2.2
 	k8s.io/apiextensions-apiserver v0.0.0-20181204003618-e419c5771cdc
 	k8s.io/apimachinery v0.0.0-20190717022731-0bb8574e0887
 	sigs.k8s.io/yaml v1.1.0
