@@ -9,17 +9,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func GetManifestsDir(manifestDirectory string) (registry.PackageManifest, []*registry.Bundle, []validator.ManifestResult) {
-	// parse manifest directory
-	manifests, err := internal.ManifestsStoreForDir(manifestDirectory)
+func GetManifestsDir(dir string) (registry.PackageManifest, []*registry.Bundle, []validator.ManifestResult) {
+	// Parse manifest directory and populate a store containing all manifests
+	// in dir.
+	manifests, err := internal.ManifestsStoreForDir(dir)
 	if err != nil {
 		logrus.Fatal(err)
 		return registry.PackageManifest{}, nil, nil
 	}
 	pkg := manifests.GetPackageManifest()
 	bundles := manifests.GetBundles()
-	// validate bundle
-	val := validation.NewBundleValidator(pkg, bundles...)
+	// Validate manifests collectively in dir.
+	val := validation.NewManifestsValidator(pkg, bundles...)
 	results := val.Validate()
 	return pkg, bundles, results
 }

@@ -16,8 +16,8 @@ type Validator interface {
 // TODO: add configurable logger.
 type Validators []Validator
 
-// NewValidatorSet creates a Validators containing vs.
-func NewValidatorSet(vs ...Validator) Validators {
+// NewValidators creates a Validators containing vs.
+func NewValidators(vs ...Validator) Validators {
 	vals := Validators{}
 	vals.AddValidators(vs...)
 	return vals

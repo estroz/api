@@ -260,17 +260,19 @@ func validateInstallModes(csv *v1alpha1.ClusterServiceVersion) (errs []validator
 	}
 
 	// all installModes should not be `false`
-	if checkAllFalseForInstallModeSet(installModeSet) {
+	if !hasSupportedInstallMode(csv) {
 		errs = append(errs, validator.ErrInvalidCSV("none of InstallModeTypes are supported", csv.GetName()))
 	}
 	return errs
 }
 
-func checkAllFalseForInstallModeSet(installModeSet v1alpha1.InstallModeSet) bool {
-	for _, isSupported := range installModeSet {
-		if isSupported {
-			return false
+// hasSupportedInstallMode returns true if a csv supports at least one
+// installMode.
+func hasSupportedInstallMode(csv *v1alpha1.ClusterServiceVersion) bool {
+	for _, mode := range csv.Spec.InstallModes {
+		if mode.Supported {
+			return true
 		}
 	}
-	return true
+	return false
 }
