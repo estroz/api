@@ -73,15 +73,13 @@ func validateCRD(crd *v1beta1.CustomResourceDefinition) (manifestResult validato
 	unversionedCRD := apiextensions.CustomResourceDefinition{}
 	err := Scheme.Converter().Convert(&crd, &unversionedCRD, conversion.SourceToDest, nil)
 	if err != nil {
-		verr := validator.Error{Type: validator.ErrorInvalidParse, Message: err.Error()}
-		manifestResult.Errors = append(manifestResult.Errors, verr)
+		manifestResult.Add(validator.ErrInvalidParse(err.Error(), nil))
 		return manifestResult
 	}
 	errList := validation.ValidateCustomResourceDefinition(&unversionedCRD)
 	for _, err := range errList {
 		if !strings.Contains(err.Field, "openAPIV3Schema") && !strings.Contains(err.Field, "status") {
-			verr := validator.Error{Type: validator.ErrorType(err.Type), Field: err.Field, BadValue: err.BadValue, Message: err.Error()}
-			manifestResult.Errors = append(manifestResult.Errors, verr)
+			manifestResult.Add(validator.NewError(validator.ErrorType(err.Type), err.Error(), err.Field, err.BadValue))
 		}
 	}
 	return manifestResult

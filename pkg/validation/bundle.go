@@ -81,7 +81,7 @@ func (v bundleValidator) validateBundle() validator.ManifestResult {
 		csvsInBundle = append(csvsInBundle, csv.GetName())
 		csvReplacesMap[csv.GetName()] = csv.Spec.Replaces
 		if csv.GetName() == csv.Spec.Replaces {
-			manifestResult.Warnings = append(manifestResult.Warnings, validator.InvalidCSV(fmt.Sprintf("Warning: `spec.replaces` field matches its own `metadata.Name` for CSV %s. It should contain `metadata.Name` of the old CSV to be replaced", csv.GetName())))
+			manifestResult.Add(validator.WarnInvalidCSV("`spec.replaces` field matches its own `metadata.name`. It should contain `metadata.name` of the old CSV to be replaced", csv.GetName()))
 		}
 		manifestResult = validateOwnedCRDs(bundle, csv, manifestResult)
 	}
@@ -93,7 +93,7 @@ func (v bundleValidator) validateBundle() validator.ManifestResult {
 func checkDefaultChannelInBundle(pkg registry.PackageManifest, csvsInBundle []string, manifestResult validator.ManifestResult) validator.ManifestResult {
 	for _, channel := range pkg.Channels {
 		if !isStringPresent(csvsInBundle, channel.CurrentCSVName) {
-			manifestResult.Errors = append(manifestResult.Errors, validator.InvalidBundle(fmt.Sprintf("Error: currentCSV `%s` for channel name `%s` in package `%s` not found in manifest", channel.CurrentCSVName, channel.Name, pkg.PackageName), channel.CurrentCSVName))
+			manifestResult.Add(validator.ErrInvalidBundle(fmt.Sprintf("currentCSV `%s` for channel name `%s` in package `%s` not found in bundle", channel.CurrentCSVName, channel.Name, pkg.PackageName), channel.CurrentCSVName))
 		}
 	}
 	return manifestResult
@@ -103,14 +103,14 @@ func validateOwnedCRDs(bundle *registry.Bundle, csv *olmapiv1alpha1.ClusterServi
 	ownedCrdNames := getOwnedCustomResourceDefintionNames(csv)
 	bundleCrdNames, err := getBundleCRDNames(bundle)
 	if err != (validator.Error{}) {
-		manifestResult.Errors = append(manifestResult.Errors, err)
+		manifestResult.Add(err)
 		return manifestResult
 	}
 
 	// validating names
 	for _, ownedCrd := range ownedCrdNames {
 		if !bundleCrdNames[ownedCrd] {
-			manifestResult.Errors = append(manifestResult.Errors, validator.InvalidBundle(fmt.Sprintf("Error: owned crd (%s) not found in bundle %s", ownedCrd, bundle.Name), ownedCrd))
+			manifestResult.Add(validator.ErrInvalidBundle(fmt.Sprintf("owned crd (%s) not found in bundle %s", ownedCrd, bundle.Name), ownedCrd))
 		} else {
 			delete(bundleCrdNames, ownedCrd)
 		}
@@ -118,7 +118,7 @@ func validateOwnedCRDs(bundle *registry.Bundle, csv *olmapiv1alpha1.ClusterServi
 	// CRDs not defined in the CSV present in the bundle
 	if len(bundleCrdNames) != 0 {
 		for crd, _ := range bundleCrdNames {
-			manifestResult.Warnings = append(manifestResult.Warnings, validator.InvalidBundle(fmt.Sprintf("Warning: `%s` crd present in bundle `%s` not defined in csv", crd, bundle.Name), crd))
+			manifestResult.Add(validator.WarnInvalidBundle(fmt.Sprintf("`%s` crd present in bundle `%s` not defined in csv", crd, bundle.Name), crd))
 		}
 	}
 	return manifestResult
@@ -151,9 +151,9 @@ func getBundleCRDNames(bundle *registry.Bundle) (map[string]bool, validator.Erro
 func checkReplacesForCSVs(csvReplacesMap map[string]string, csvsInBundle []string, manifestResult validator.ManifestResult) validator.ManifestResult {
 	for pathCSV, replaces := range csvReplacesMap {
 		if replaces == "" {
-			manifestResult.Warnings = append(manifestResult.Warnings, validator.InvalidCSV(fmt.Sprintf("Warning: `spec.replaces` field not present in %s csv. If this csv replaces an old version, populate this field with the `metadata.Name` of the old csv", pathCSV)))
+			manifestResult.Add(validator.WarnInvalidCSV("`spec.replaces` field not present. If this csv replaces an old version, populate this field with the `metadata.Name` of the old csv", pathCSV))
 		} else if !isStringPresent(csvsInBundle, replaces) {
-			manifestResult.Errors = append(manifestResult.Errors, validator.InvalidCSV(fmt.Sprintf("Error: `%s` mentioned in the `spec.replaces` field of %s csv not present in the manifest", replaces, pathCSV)))
+			manifestResult.Add(validator.ErrInvalidCSV(fmt.Sprintf("`%s` mentioned in the `spec.replaces` field ofnot present in the manifest", replaces), pathCSV))
 		}
 	}
 	return manifestResult

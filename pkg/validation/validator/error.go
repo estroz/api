@@ -1,8 +1,6 @@
 package validator
 
-import (
-	"fmt"
-)
+import "fmt"
 
 // ManifestResult represents verification result for each of the yaml files
 // from the operator manifest.
@@ -15,6 +13,22 @@ type ManifestResult struct {
 	Warnings []Error
 }
 
+func (r *ManifestResult) Add(err Error) {
+	if err.Level == LevelError {
+		r.Errors = append(r.Errors, err)
+	} else {
+		r.Warnings = append(r.Warnings, err)
+	}
+}
+
+func (r ManifestResult) HasError() bool {
+	return len(r.Errors) == 0
+}
+
+func (r ManifestResult) HasWarn() bool {
+	return len(r.Warnings) == 0
+}
+
 // Error is an implementation of the 'error' interface, which represents a
 // warning or an error in a yaml file. Error type is taken as is from
 // https://github.com/operator-framework/operator-registry/blob/master/vendor/k8s.io/apimachinery/pkg/util/validation/field/errors.go#L31
@@ -23,6 +37,8 @@ type Error struct {
 	// Type is the ErrorType string constant that represents the kind of
 	// error, ex. "MandatoryStructMissing", "I/O".
 	Type ErrorType
+	// Level is the severity of the Error.
+	Level Level
 	// Field is the dot-hierarchical YAML path of the missing data.
 	Field string
 	// BadValue is the field or file that caused an error or warning.
@@ -31,59 +47,168 @@ type Error struct {
 	Message string
 }
 
+// Error strut implements the 'error' interface to define custom error formatting.
+func (e Error) Error() string {
+	msg := e.Message
+	if msg != "" {
+		msg = fmt.Sprintf(": %s", msg)
+	}
+	if e.Field != "" && e.BadValue != nil {
+		msg = fmt.Sprintf("Field %s, Value %v%s", e.Field, e.BadValue, msg)
+	} else if e.Field != "" {
+		msg = fmt.Sprintf("Field %s%s", e.Field, msg)
+	} else if e.BadValue != nil {
+		msg = fmt.Sprintf("Value %v%s", e.BadValue, msg)
+	}
+	if msg != "" {
+		return fmt.Sprintf("%s: %s", e.Level, msg)
+	}
+	return "ErrMessageMissing"
+}
+
+type Level string
+
+const (
+	LevelWarn  = "Warning"
+	LevelError = "Error"
+)
+
+func NewError(t ErrorType, msg, field string, v interface{}) Error {
+	return Error{Level: LevelError, Type: t, Message: msg, Field: field, BadValue: v}
+}
+
+func NewWarn(t ErrorType, msg, field string, v interface{}) Error {
+	return Error{Level: LevelWarn, Type: t, Message: msg, Field: field, BadValue: v}
+}
+
 type ErrorType string
 
-func InvalidBundle(detail string, value interface{}) Error {
-	return Error{ErrorInvalidBundle, "", value, detail}
+func ErrInvalidBundle(msg string, value interface{}) Error {
+	return invalidBundle(LevelError, msg, value)
 }
 
-func InvalidManifestStructure(detail string) Error {
-	return Error{ErrorInvalidManifestStructure, "", "", detail}
+func WarnInvalidBundle(msg string, value interface{}) Error {
+	return invalidBundle(LevelError, msg, value)
 }
 
-func InvalidCSV(detail string) Error {
-	return Error{ErrorInvalidCSV, "", "", detail}
+func invalidBundle(lvl Level, msg string, value interface{}) Error {
+	return Error{ErrorInvalidBundle, lvl, "", value, msg}
 }
 
-func OptionalFieldMissing(detail string, field string, value interface{}) Error {
-	return Error{WarningFieldMissing, field, value, detail}
+func ErrInvalidManifestStructure(msg string) Error {
+	return invalidManifestStructure(LevelError, msg)
 }
 
-func MandatoryFieldMissing(detail string, field string, value interface{}) Error {
-	return Error{ErrorFieldMissing, field, value, detail}
+func WarnInvalidManifestStructure(msg string) Error {
+	return invalidManifestStructure(LevelWarn, msg)
 }
 
-func UnsupportedType(detail string) Error {
-	return Error{ErrorUnsupportedType, "", "", detail}
+func invalidManifestStructure(lvl Level, msg string) Error {
+	return Error{ErrorInvalidManifestStructure, lvl, "", "", msg}
+}
+
+func ErrInvalidCSV(msg, csvName string) Error {
+	return invalidCSV(LevelError, msg, csvName)
+}
+
+func WarnInvalidCSV(msg, csvName string) Error {
+	return invalidCSV(LevelWarn, msg, csvName)
+}
+
+func invalidCSV(lvl Level, msg, csvName string) Error {
+	return Error{ErrorInvalidCSV, lvl, "", "", fmt.Sprintf("(%s) %s", csvName, msg)}
+}
+
+func ErrFieldMissing(msg string, field string, value interface{}) Error {
+	return fieldMissing(LevelError, msg, field, value)
+}
+
+func WarnFieldMissing(msg string, field string, value interface{}) Error {
+	return fieldMissing(LevelWarn, msg, field, value)
+}
+
+func fieldMissing(lvl Level, msg string, field string, value interface{}) Error {
+	return Error{ErrorFieldMissing, lvl, field, value, msg}
+}
+
+func ErrUnsupportedType(msg string) Error {
+	return unsupportedType(LevelError, msg)
+}
+
+func WarnUnsupportedType(msg string) Error {
+	return unsupportedType(LevelWarn, msg)
+}
+
+func unsupportedType(lvl Level, msg string) Error {
+	return Error{ErrorUnsupportedType, lvl, "", "", msg}
 }
 
 // TODO: see if more information can be extracted out of 'unmarshall/parsing' errors.
-func InvalidParse(detail string, value interface{}) Error {
-	return Error{ErrorInvalidParse, "", value, detail}
+func ErrInvalidParse(msg string, value interface{}) Error {
+	return invalidParse(LevelError, msg, value)
 }
 
-func InvalidDefaultChannel(detail string, value interface{}) Error {
-	return Error{ErrorInvalidDefaultChannel, "", value, detail}
+func WarnInvalidParse(msg string, value interface{}) Error {
+	return invalidParse(LevelWarn, msg, value)
 }
 
-func IOError(detail string, value interface{}) Error {
-	return Error{ErrorIO, "", value, detail}
+func invalidParse(lvl Level, msg string, value interface{}) Error {
+	return Error{ErrorInvalidParse, lvl, "", value, msg}
 }
 
-func FailedValidation(detail string, value interface{}) Error {
-	return Error{ErrorFailedValidation, "", value, detail}
+func ErrInvalidDefaultChannel(msg string, value interface{}) Error {
+	return invalidDefaultChannel(LevelError, msg, value)
 }
 
-func InvalidOperation(detail string, value interface{}) Error {
-	return Error{ErrorInvalidOperation, "", value, detail}
+func WarnInvalidDefaultChannel(msg string, value interface{}) Error {
+	return invalidDefaultChannel(LevelWarn, msg, value)
+}
+
+func invalidDefaultChannel(lvl Level, msg string, value interface{}) Error {
+	return Error{ErrorInvalidDefaultChannel, lvl, "", value, msg}
+}
+
+func ErrIOError(msg string, value interface{}) Error {
+	return iOError(LevelError, msg, value)
+}
+
+func WarnIOError(msg string, value interface{}) Error {
+	return iOError(LevelWarn, msg, value)
+}
+
+func iOError(lvl Level, msg string, value interface{}) Error {
+	return Error{ErrorIO, lvl, "", value, msg}
+}
+
+func ErrFailedValidation(msg string, value interface{}) Error {
+	return failedValidation(LevelError, msg, value)
+}
+
+func WarnFailedValidation(msg string, value interface{}) Error {
+	return failedValidation(LevelWarn, msg, value)
+}
+
+func failedValidation(lvl Level, msg string, value interface{}) Error {
+	return Error{ErrorFailedValidation, lvl, "", value, msg}
+}
+
+func ErrInvalidOperation(msg string, value interface{}) Error {
+	return invalidOperation(LevelError, msg, value)
+}
+
+func WarnInvalidOperation(msg string, value interface{}) Error {
+	return invalidOperation(LevelWarn, msg, value)
+}
+
+func invalidOperation(lvl Level, msg string, value interface{}) Error {
+	return Error{ErrorInvalidOperation, lvl, "", value, msg}
 }
 
 const (
 	ErrorInvalidCSV               ErrorType = "CSVFileNotValid"
-	WarningFieldMissing           ErrorType = "OptionalFieldNotFound"
-	ErrorFieldMissing             ErrorType = "MandatoryFieldNotFound"
+	ErrorFieldMissing             ErrorType = "FieldNotFound"
 	ErrorUnsupportedType          ErrorType = "FieldTypeNotSupported"
-	ErrorInvalidParse             ErrorType = "Unmarshall/ParseError"
+	ErrorInvalidParse             ErrorType = "ParseError"
 	ErrorIO                       ErrorType = "FileReadError"
 	ErrorFailedValidation         ErrorType = "ValidationFailed"
 	ErrorInvalidOperation         ErrorType = "OperationFailed"
@@ -91,38 +216,3 @@ const (
 	ErrorInvalidBundle            ErrorType = "BundleNotValid"
 	ErrorInvalidDefaultChannel    ErrorType = "DefaultChannelNotValid"
 )
-
-// String converts a ErrorType into its corresponding canonical error message.
-func (t ErrorType) String() string {
-	switch t {
-	case ErrorInvalidCSV:
-		return "CSV file not valid"
-	case WarningFieldMissing:
-		return "Optional field not found"
-	case ErrorFieldMissing:
-		return "Mandatory field not found"
-	case ErrorUnsupportedType:
-		return "Field type not supported"
-	case ErrorInvalidParse:
-		return "Unmarshall/Parse error"
-	case ErrorIO:
-		return "File read error"
-	case ErrorFailedValidation:
-		return "Validation failed"
-	case ErrorInvalidOperation:
-		return "Operation failed"
-	case ErrorInvalidManifestStructure:
-		return "Manifest directory structure not valid"
-	case ErrorInvalidBundle:
-		return "Manifest bundle not valid"
-	case ErrorInvalidDefaultChannel:
-		return "Default channel not valid"
-	default:
-		panic(fmt.Sprintf("Unrecognized validation error: %q", string(t)))
-	}
-}
-
-// Error strut implements the 'error' interface to define custom error formatting.
-func (err Error) Error() string {
-	return err.Message
-}

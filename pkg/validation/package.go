@@ -37,7 +37,7 @@ func pkgInspect(pkg registry.PackageManifest) (manifestResult validator.Manifest
 	manifestResult = validator.ManifestResult{}
 	present, manifestResult := isDefaultPresent(pkg, manifestResult)
 	if !present {
-		manifestResult.Errors = append(manifestResult.Errors, validator.InvalidDefaultChannel(fmt.Sprintf("Error: default channel %s not found in the list of declared channels", pkg.DefaultChannelName), pkg.DefaultChannelName))
+		manifestResult.Add(validator.ErrInvalidDefaultChannel(fmt.Sprintf("default channel %s not found in the list of declared channels", pkg.DefaultChannelName), pkg.DefaultChannelName))
 	}
 	return
 }
@@ -46,7 +46,7 @@ func isDefaultPresent(pkg registry.PackageManifest, manifestResult validator.Man
 	present := false
 	for _, channel := range pkg.Channels {
 		if pkg.DefaultChannelName == "" {
-			manifestResult.Warnings = append(manifestResult.Warnings, validator.InvalidDefaultChannel(fmt.Sprintf("Warning: default channel not found in %s package manifest", pkg.PackageName), pkg.PackageName))
+			manifestResult.Add(validator.WarnInvalidDefaultChannel(fmt.Sprintf("default channel not found in %s package manifest", pkg.PackageName), pkg.PackageName))
 			return true, manifestResult
 		} else if pkg.DefaultChannelName == channel.Name {
 			present = true

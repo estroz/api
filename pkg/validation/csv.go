@@ -53,13 +53,8 @@ func validateCSV(csv *v1alpha1.ClusterServiceVersion) validator.ManifestResult {
 	switch fieldValue.Kind() {
 	case reflect.Struct:
 		return checkMissingFields(fieldValue, "", manifestResult)
-	default:
-		errs := []validator.Error{
-			validator.InvalidCSV("Error: input file is not a valid CSV"),
-		}
-
-		return validator.ManifestResult{Errors: errs, Warnings: nil}
 	}
+	return manifestResult
 }
 
 // Recursive function that traverses a nested struct passed in as reflect value, and reports for errors/warnings
@@ -106,11 +101,11 @@ func updateLog(log validator.ManifestResult, typeName string, newParentStructNam
 
 	if emptyVal && isOptionalField {
 		// TODO: update the value field (typeName).
-		log.Warnings = append(log.Warnings, validator.OptionalFieldMissing(fmt.Sprintf("Warning: optional %s missing: (%s)", typeName, newParentStructName), newParentStructName, typeName))
+		log.Add(validator.WarnFieldMissing("", newParentStructName, typeName))
 	} else if emptyVal && !isOptionalField {
 		if newParentStructName != "Status" {
 			// TODO: update the value field (typeName).
-			log.Errors = append(log.Errors, validator.MandatoryFieldMissing(fmt.Sprintf("Error: mandatory %s missing: (%s)", typeName, newParentStructName), newParentStructName, typeName))
+			log.Add(validator.ErrFieldMissing("", newParentStructName, typeName))
 		}
 	}
 	return log
@@ -169,7 +164,7 @@ func validateExamplesAnnotations(csv *v1alpha1.ClusterServiceVersion) (manifestR
 	annotations := csv.ObjectMeta.GetAnnotations()
 	// Return right away if no examples annotations are found.
 	if len(annotations) == 0 {
-		manifestResult.Warnings = append(manifestResult.Warnings, validator.InvalidCSV(fmt.Sprintf("Warning: example annotations not found for %s csv", csv.GetName())))
+		manifestResult.Add(validator.WarnInvalidCSV("annotations not found", csv.GetName()))
 		return
 	}
 	// Expect either `alm-examples` or `olm.examples` but not both
@@ -178,7 +173,7 @@ func validateExamplesAnnotations(csv *v1alpha1.ClusterServiceVersion) (manifestR
 		annotationsExamples = value
 		if _, ok = annotations["olm.examples"]; ok {
 			// both `alm-examples` and `olm.examples` are present
-			manifestResult.Warnings = append(manifestResult.Warnings, validator.InvalidCSV(fmt.Sprintf("Warning: both `alm-examples` and `olm.examples` are present in %s CSV. Defaulting to `alm-examples` and ignoring `olm.examples`", csv.GetName())))
+			manifestResult.Add(validator.WarnInvalidCSV("both `alm-examples` and `olm.examples` are present. Checking only `alm-examples`", csv.GetName()))
 		}
 	} else {
 		annotationsExamples = annotations["olm.examples"]
@@ -186,12 +181,12 @@ func validateExamplesAnnotations(csv *v1alpha1.ClusterServiceVersion) (manifestR
 
 	// Can't find examples annotations, simply return
 	if annotationsExamples == "" {
-		manifestResult.Warnings = append(manifestResult.Warnings, validator.InvalidCSV(fmt.Sprintf("Warning: example annotations not found for %s csv", csv.GetName())))
+		manifestResult.Add(validator.WarnInvalidCSV("example annotations not found", csv.GetName()))
 		return
 	}
 
 	if err := json.Unmarshal([]byte(annotationsExamples), &examples); err != nil {
-		manifestResult = getManifestResult(validator.InvalidParse(fmt.Sprintf("Error: parsing example annotations to %T type:  %s ", examples, err), nil))
+		manifestResult.Add(validator.ErrInvalidParse(fmt.Sprintf("parsing example annotations to %T type:  %s ", examples, err), nil))
 		return
 	}
 
@@ -211,7 +206,7 @@ func getProvidedAPIs(csv *v1alpha1.ClusterServiceVersion, manifestResult validat
 	for _, owned := range csv.Spec.CustomResourceDefinitions.Owned {
 		parts := strings.SplitN(owned.Name, ".", 2)
 		if len(parts) < 2 {
-			manifestResult.Errors = append(manifestResult.Errors, validator.InvalidParse(fmt.Sprintf("Error: couldn't parse plural.group from crd name: %s", owned.Name), owned.Name))
+			manifestResult.Add(validator.ErrInvalidParse(fmt.Sprintf("couldn't parse plural.group from crd name: %s", owned.Name), owned.Name))
 			continue
 		}
 		provided[schema.GroupVersionKind{Group: parts[1], Version: owned.Version, Kind: owned.Kind}] = struct{}{}
@@ -229,7 +224,7 @@ func parseExamplesAnnotations(examples []v1beta1.CustomResourceDefinition, manif
 	for _, value := range examples {
 		parts := strings.SplitN(value.APIVersion, "/", 2)
 		if len(parts) < 2 {
-			manifestResult.Errors = append(manifestResult.Errors, validator.InvalidParse(fmt.Sprintf("Error: couldn't parse group/version from crd kind: %s", value.Kind), value.Kind))
+			manifestResult.Add(validator.ErrInvalidParse(fmt.Sprintf("couldn't parse group/version from crd kind: %s", value.Kind), value.Kind))
 			continue
 		}
 		parsed[schema.GroupVersionKind{Group: parts[0], Version: parts[1], Kind: value.Kind}] = struct{}{}
@@ -241,16 +236,11 @@ func parseExamplesAnnotations(examples []v1beta1.CustomResourceDefinition, manif
 func matchGVKProvidedAPIs(examples map[schema.GroupVersionKind]struct{}, providedAPIs map[schema.GroupVersionKind]struct{}, manifestResult validator.ManifestResult) validator.ManifestResult {
 	for key := range examples {
 		if _, ok := providedAPIs[key]; !ok {
-			manifestResult.Errors = append(manifestResult.Errors, validator.InvalidOperation(fmt.Sprintf("Error: couldn't match %v in provided APIs list: %v", key, providedAPIs), key))
+			manifestResult.Add(validator.ErrInvalidOperation(fmt.Sprintf("couldn't match %v in provided APIs list: %v", key, providedAPIs), key))
 			continue
 		}
 	}
 	return manifestResult
-}
-
-func getManifestResult(errs ...validator.Error) validator.ManifestResult {
-	errList := append([]validator.Error{}, errs...)
-	return validator.ManifestResult{Errors: errList, Warnings: nil}
 }
 
 func validateInstallModes(csv *v1alpha1.ClusterServiceVersion, manifestResult validator.ManifestResult) validator.ManifestResult {
@@ -258,7 +248,7 @@ func validateInstallModes(csv *v1alpha1.ClusterServiceVersion, manifestResult va
 	installModeSet := make(v1alpha1.InstallModeSet)
 	for _, installMode := range csv.Spec.InstallModes {
 		if _, ok := installModeSet[installMode.Type]; ok {
-			manifestResult.Errors = append(manifestResult.Errors, validator.InvalidCSV(fmt.Sprintf("Error: duplicate install modes present in %s csv", csv.GetName())))
+			manifestResult.Add(validator.ErrInvalidCSV("duplicate install modes present", csv.GetName()))
 		} else {
 			installModeSet[installMode.Type] = installMode.Supported
 		}
@@ -266,13 +256,13 @@ func validateInstallModes(csv *v1alpha1.ClusterServiceVersion, manifestResult va
 
 	// installModes not found, return with a warning
 	if len(installModeSet) == 0 {
-		manifestResult.Warnings = append(manifestResult.Warnings, validator.InvalidCSV(fmt.Sprintf("Warning: install modes not found for %s csv", csv.GetName())))
+		manifestResult.Add(validator.WarnInvalidCSV("install modes not found", csv.GetName()))
 		return manifestResult
 	}
 
 	// all installModes should not be `false`
 	if checkAllFalseForInstallModeSet(installModeSet) {
-		manifestResult.Errors = append(manifestResult.Errors, validator.InvalidCSV(fmt.Sprintf("Error: none of InstallModeTypes are supported for %s csv", csv.GetName())))
+		manifestResult.Add(validator.ErrInvalidCSV("none of InstallModeTypes are supported", csv.GetName()))
 	}
 	return manifestResult
 }
