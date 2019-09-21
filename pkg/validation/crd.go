@@ -1,13 +1,10 @@
 package validation
 
 import (
-	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/operator-framework/api/pkg/validation/validator"
 
-	"github.com/ghodss/yaml"
 	"github.com/operator-framework/operator-registry/pkg/appregistry"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -55,32 +52,18 @@ func (v crdValidator) Name() string {
 	return "CustomResourceDefinition Validator"
 }
 
-// removeme
-func (v crdValidator) Unmarshal(rawYaml []byte) (interface{}, error) {
-	var crd v1beta1.CustomResourceDefinition
-	yaml.Marshal(crd)
-	rawJson, err := yaml.YAMLToJSON(rawYaml)
-	if err != nil {
-		return v1beta1.CustomResourceDefinition{}, fmt.Errorf("error decoding manifest: %v", err)
-	}
-	if err := json.Unmarshal(rawJson, &crd); err != nil {
-		return v1beta1.CustomResourceDefinition{}, fmt.Errorf("error parsing CRD (JSON): %v", err)
-	}
-	return crd, nil
-}
-
-func validateCRD(crd *v1beta1.CustomResourceDefinition) (manifestResult validator.ManifestResult) {
+func validateCRD(crd *v1beta1.CustomResourceDefinition) (results validator.ManifestResult) {
 	unversionedCRD := apiextensions.CustomResourceDefinition{}
 	err := Scheme.Converter().Convert(&crd, &unversionedCRD, conversion.SourceToDest, nil)
 	if err != nil {
-		manifestResult.Add(validator.ErrInvalidParse(err.Error(), nil))
-		return manifestResult
+		results.Add(validator.ErrInvalidParse(err.Error(), nil))
+		return results
 	}
 	errList := validation.ValidateCustomResourceDefinition(&unversionedCRD)
 	for _, err := range errList {
 		if !strings.Contains(err.Field, "openAPIV3Schema") && !strings.Contains(err.Field, "status") {
-			manifestResult.Add(validator.NewError(validator.ErrorType(err.Type), err.Error(), err.Field, err.BadValue))
+			results.Add(validator.NewError(validator.ErrorType(err.Type), err.Error(), err.Field, err.BadValue))
 		}
 	}
-	return manifestResult
+	return results
 }

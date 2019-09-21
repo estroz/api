@@ -13,11 +13,13 @@ type ManifestResult struct {
 	Warnings []Error
 }
 
-func (r *ManifestResult) Add(err Error) {
-	if err.Level == LevelError {
-		r.Errors = append(r.Errors, err)
-	} else {
-		r.Warnings = append(r.Warnings, err)
+func (r *ManifestResult) Add(errs ...Error) {
+	for _, err := range errs {
+		if err.Level == LevelError {
+			r.Errors = append(r.Errors, err)
+		} else {
+			r.Warnings = append(r.Warnings, err)
+		}
 	}
 }
 
@@ -156,16 +158,16 @@ func invalidParse(lvl Level, msg string, value interface{}) Error {
 	return Error{ErrorInvalidParse, lvl, "", value, msg}
 }
 
-func ErrInvalidDefaultChannel(msg string, value interface{}) Error {
-	return invalidDefaultChannel(LevelError, msg, value)
+func ErrInvalidPackageManifest(msg string, pkgName string) Error {
+	return invalidPackageManifest(LevelError, msg, pkgName)
 }
 
-func WarnInvalidDefaultChannel(msg string, value interface{}) Error {
-	return invalidDefaultChannel(LevelWarn, msg, value)
+func WarnInvalidPackageManifest(msg string, pkgName string) Error {
+	return invalidPackageManifest(LevelWarn, msg, pkgName)
 }
 
-func invalidDefaultChannel(lvl Level, msg string, value interface{}) Error {
-	return Error{ErrorInvalidDefaultChannel, lvl, "", value, msg}
+func invalidPackageManifest(lvl Level, msg string, pkgName string) Error {
+	return Error{ErrorInvalidPackageManifest, lvl, "", "", fmt.Sprintf("(%s) %s", pkgName, msg)}
 }
 
 func ErrIOError(msg string, value interface{}) Error {
@@ -214,5 +216,5 @@ const (
 	ErrorInvalidOperation         ErrorType = "OperationFailed"
 	ErrorInvalidManifestStructure ErrorType = "ManifestStructureNotValid"
 	ErrorInvalidBundle            ErrorType = "BundleNotValid"
-	ErrorInvalidDefaultChannel    ErrorType = "DefaultChannelNotValid"
+	ErrorInvalidPackageManifest   ErrorType = "PackageManifestNotValid"
 )

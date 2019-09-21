@@ -39,27 +39,28 @@ func (v csvValidator) Name() string {
 }
 
 // Iterates over the given CSV. Returns a ManifestResult type object.
-func validateCSV(csv *v1alpha1.ClusterServiceVersion) validator.ManifestResult {
+func validateCSV(csv *v1alpha1.ClusterServiceVersion) (result validator.ManifestResult) {
 
 	// validate example annotations ("alm-examples", "olm.examples").
-	manifestResult := validateExamplesAnnotations(csv)
+	result.Add(validateExamplesAnnotations(csv)...)
 
 	// validate installModes
-	manifestResult = validateInstallModes(csv, manifestResult)
+	result.Add(validateInstallModes(csv)...)
 
 	// check missing optional/mandatory fields.
 	fieldValue := reflect.ValueOf(csv)
 
 	switch fieldValue.Kind() {
 	case reflect.Struct:
-		return checkMissingFields(fieldValue, "", manifestResult)
+		checkMissingFields(&result, fieldValue, "")
+		return result
 	}
-	return manifestResult
+	return result
 }
 
 // Recursive function that traverses a nested struct passed in as reflect value, and reports for errors/warnings
 // in case of null struct field values.
-func checkMissingFields(v reflect.Value, parentStructName string, log validator.ManifestResult) validator.ManifestResult {
+func checkMissingFields(log *validator.ManifestResult, v reflect.Value, parentStructName string) {
 
 	for i := 0; i < v.NumField(); i++ {
 
@@ -84,20 +85,18 @@ func checkMissingFields(v reflect.Value, parentStructName string, log validator.
 
 		switch fieldValue.Kind() {
 		case reflect.Struct:
-			log = updateLog(log, "struct", newParentStructName, emptyVal, isOptionalField)
-			if emptyVal {
-				continue
+			updateLog(log, "struct", newParentStructName, emptyVal, isOptionalField)
+			if !emptyVal {
+				checkMissingFields(log, fieldValue, newParentStructName)
 			}
-			log = checkMissingFields(fieldValue, newParentStructName, log)
 		default:
-			log = updateLog(log, "field", newParentStructName, emptyVal, isOptionalField)
+			updateLog(log, "field", newParentStructName, emptyVal, isOptionalField)
 		}
 	}
-	return log
 }
 
 // Returns updated error log with missing optional/mandatory field/struct objects.
-func updateLog(log validator.ManifestResult, typeName string, newParentStructName string, emptyVal bool, isOptionalField bool) validator.ManifestResult {
+func updateLog(log *validator.ManifestResult, typeName string, newParentStructName string, emptyVal bool, isOptionalField bool) {
 
 	if emptyVal && isOptionalField {
 		// TODO: update the value field (typeName).
@@ -108,7 +107,6 @@ func updateLog(log validator.ManifestResult, typeName string, newParentStructNam
 			log.Add(validator.ErrFieldMissing("", newParentStructName, typeName))
 		}
 	}
-	return log
 }
 
 // Takes in a string slice and checks if a string (x) is present in the slice.
@@ -158,14 +156,14 @@ func isEmptyValue(v reflect.Value) bool {
 
 // validateExamplesAnnotations compares alm/olm example annotations with provided APIs given
 // by Spec.CustomResourceDefinitions.Owned and Spec.APIServiceDefinitions.Owned.
-func validateExamplesAnnotations(csv *v1alpha1.ClusterServiceVersion) (manifestResult validator.ManifestResult) {
+func validateExamplesAnnotations(csv *v1alpha1.ClusterServiceVersion) (errs []validator.Error) {
 	var examples []v1beta1.CustomResourceDefinition
 	var annotationsExamples string
 	annotations := csv.ObjectMeta.GetAnnotations()
 	// Return right away if no examples annotations are found.
 	if len(annotations) == 0 {
-		manifestResult.Add(validator.WarnInvalidCSV("annotations not found", csv.GetName()))
-		return
+		errs = append(errs, validator.WarnInvalidCSV("annotations not found", csv.GetName()))
+		return errs
 	}
 	// Expect either `alm-examples` or `olm.examples` but not both
 	// If both are present, `alm-examples` will be used
@@ -173,7 +171,7 @@ func validateExamplesAnnotations(csv *v1alpha1.ClusterServiceVersion) (manifestR
 		annotationsExamples = value
 		if _, ok = annotations["olm.examples"]; ok {
 			// both `alm-examples` and `olm.examples` are present
-			manifestResult.Add(validator.WarnInvalidCSV("both `alm-examples` and `olm.examples` are present. Checking only `alm-examples`", csv.GetName()))
+			errs = append(errs, validator.WarnInvalidCSV("both `alm-examples` and `olm.examples` are present. Checking only `alm-examples`", csv.GetName()))
 		}
 	} else {
 		annotationsExamples = annotations["olm.examples"]
@@ -181,32 +179,34 @@ func validateExamplesAnnotations(csv *v1alpha1.ClusterServiceVersion) (manifestR
 
 	// Can't find examples annotations, simply return
 	if annotationsExamples == "" {
-		manifestResult.Add(validator.WarnInvalidCSV("example annotations not found", csv.GetName()))
-		return
+		errs = append(errs, validator.WarnInvalidCSV("example annotations not found", csv.GetName()))
+		return errs
 	}
 
 	if err := json.Unmarshal([]byte(annotationsExamples), &examples); err != nil {
-		manifestResult.Add(validator.ErrInvalidParse(fmt.Sprintf("parsing example annotations to %T type:  %s ", examples, err), nil))
-		return
+		errs = append(errs, validator.ErrInvalidParse(fmt.Sprintf("parsing example annotations to %T type:  %s ", examples, err), nil))
+		return errs
 	}
 
-	providedAPIs, manRes := getProvidedAPIs(csv, manifestResult)
+	providedAPIs, aerrs := getProvidedAPIs(csv)
+	errs = append(errs, aerrs...)
 
-	parsedExamples, manRes := parseExamplesAnnotations(examples, manifestResult)
-	if len(manRes.Errors) != 0 || len(manRes.Warnings) != 0 {
-		return manRes
+	parsedExamples, perrs := parseExamplesAnnotations(examples)
+	if len(perrs) != 0 {
+		errs = append(errs, perrs...)
+		return errs
 	}
 
-	return matchGVKProvidedAPIs(parsedExamples, providedAPIs, manifestResult)
+	errs = append(errs, matchGVKProvidedAPIs(parsedExamples, providedAPIs)...)
+	return errs
 }
 
-func getProvidedAPIs(csv *v1alpha1.ClusterServiceVersion, manifestResult validator.ManifestResult) (map[schema.GroupVersionKind]struct{}, validator.ManifestResult) {
-	provided := map[schema.GroupVersionKind]struct{}{}
-
+func getProvidedAPIs(csv *v1alpha1.ClusterServiceVersion) (provided map[schema.GroupVersionKind]struct{}, errs []validator.Error) {
+	provided = map[schema.GroupVersionKind]struct{}{}
 	for _, owned := range csv.Spec.CustomResourceDefinitions.Owned {
 		parts := strings.SplitN(owned.Name, ".", 2)
 		if len(parts) < 2 {
-			manifestResult.Add(validator.ErrInvalidParse(fmt.Sprintf("couldn't parse plural.group from crd name: %s", owned.Name), owned.Name))
+			errs = append(errs, validator.ErrInvalidParse(fmt.Sprintf("couldn't parse plural.group from crd name: %s", owned.Name), owned.Name))
 			continue
 		}
 		provided[schema.GroupVersionKind{Group: parts[1], Version: owned.Version, Kind: owned.Kind}] = struct{}{}
@@ -216,39 +216,38 @@ func getProvidedAPIs(csv *v1alpha1.ClusterServiceVersion, manifestResult validat
 		provided[schema.GroupVersionKind{Group: api.Group, Version: api.Version, Kind: api.Kind}] = struct{}{}
 	}
 
-	return provided, manifestResult
+	return provided, errs
 }
 
-func parseExamplesAnnotations(examples []v1beta1.CustomResourceDefinition, manifestResult validator.ManifestResult) (map[schema.GroupVersionKind]struct{}, validator.ManifestResult) {
-	parsed := map[schema.GroupVersionKind]struct{}{}
+func parseExamplesAnnotations(examples []v1beta1.CustomResourceDefinition) (parsed map[schema.GroupVersionKind]struct{}, errs []validator.Error) {
+	parsed = map[schema.GroupVersionKind]struct{}{}
 	for _, value := range examples {
 		parts := strings.SplitN(value.APIVersion, "/", 2)
 		if len(parts) < 2 {
-			manifestResult.Add(validator.ErrInvalidParse(fmt.Sprintf("couldn't parse group/version from crd kind: %s", value.Kind), value.Kind))
+			errs = append(errs, validator.ErrInvalidParse(fmt.Sprintf("couldn't parse group/version from crd kind: %s", value.Kind), value.Kind))
 			continue
 		}
 		parsed[schema.GroupVersionKind{Group: parts[0], Version: parts[1], Kind: value.Kind}] = struct{}{}
 	}
 
-	return parsed, manifestResult
+	return parsed, errs
 }
 
-func matchGVKProvidedAPIs(examples map[schema.GroupVersionKind]struct{}, providedAPIs map[schema.GroupVersionKind]struct{}, manifestResult validator.ManifestResult) validator.ManifestResult {
+func matchGVKProvidedAPIs(examples map[schema.GroupVersionKind]struct{}, providedAPIs map[schema.GroupVersionKind]struct{}) (errs []validator.Error) {
 	for key := range examples {
 		if _, ok := providedAPIs[key]; !ok {
-			manifestResult.Add(validator.ErrInvalidOperation(fmt.Sprintf("couldn't match %v in provided APIs list: %v", key, providedAPIs), key))
-			continue
+			errs = append(errs, validator.ErrInvalidOperation(fmt.Sprintf("couldn't match %v in provided APIs list: %v", key, providedAPIs), key))
 		}
 	}
-	return manifestResult
+	return errs
 }
 
-func validateInstallModes(csv *v1alpha1.ClusterServiceVersion, manifestResult validator.ManifestResult) validator.ManifestResult {
+func validateInstallModes(csv *v1alpha1.ClusterServiceVersion) (errs []validator.Error) {
 	// var installModeSet v1alpha1.InstallModeSet
 	installModeSet := make(v1alpha1.InstallModeSet)
 	for _, installMode := range csv.Spec.InstallModes {
 		if _, ok := installModeSet[installMode.Type]; ok {
-			manifestResult.Add(validator.ErrInvalidCSV("duplicate install modes present", csv.GetName()))
+			errs = append(errs, validator.ErrInvalidCSV("duplicate install modes present", csv.GetName()))
 		} else {
 			installModeSet[installMode.Type] = installMode.Supported
 		}
@@ -256,15 +255,15 @@ func validateInstallModes(csv *v1alpha1.ClusterServiceVersion, manifestResult va
 
 	// installModes not found, return with a warning
 	if len(installModeSet) == 0 {
-		manifestResult.Add(validator.WarnInvalidCSV("install modes not found", csv.GetName()))
-		return manifestResult
+		errs = append(errs, validator.WarnInvalidCSV("install modes not found", csv.GetName()))
+		return errs
 	}
 
 	// all installModes should not be `false`
 	if checkAllFalseForInstallModeSet(installModeSet) {
-		manifestResult.Add(validator.ErrInvalidCSV("none of InstallModeTypes are supported", csv.GetName()))
+		errs = append(errs, validator.ErrInvalidCSV("none of InstallModeTypes are supported", csv.GetName()))
 	}
-	return manifestResult
+	return errs
 }
 
 func checkAllFalseForInstallModeSet(installModeSet v1alpha1.InstallModeSet) bool {
