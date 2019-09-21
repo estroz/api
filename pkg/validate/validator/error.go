@@ -7,8 +7,7 @@ import (
 // ManifestResult represents verification result for each of the yaml files
 // from the operator manifest.
 type ManifestResult struct {
-	// Name is some piece of information identifying the manifest. This should
-	// usually be set to object.GetName().
+	// Name is some piece of information identifying the manifest.
 	Name string
 	// Errors pertain to issues with the manifest that must be corrected.
 	Errors []Error
@@ -28,12 +27,8 @@ type Error struct {
 	Field string
 	// BadValue is the field or file that caused an error or warning.
 	BadValue interface{}
-	// Detail represents the error message as a string.
-	Detail string
-}
-
-func (err Error) String() string {
-	return err.Error()
+	// Message represents the error message as a string.
+	Message string
 }
 
 type ErrorType string
@@ -129,5 +124,5 @@ func (t ErrorType) String() string {
 
 // Error strut implements the 'error' interface to define custom error formatting.
 func (err Error) Error() string {
-	return err.Detail
+	return err.Message
 }

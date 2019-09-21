@@ -7,65 +7,38 @@ import (
 	"strings"
 
 	"github.com/operator-framework/api/pkg/validate/validator"
-	"github.com/ghodss/yaml"
 	"github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-type CSVValidator struct {
-	fileName string
-	csvs     []v1alpha1.ClusterServiceVersion
+type csvValidator struct {
+	csvs map[string]*v1alpha1.ClusterServiceVersion
 }
 
-var _ validator.Validator = &CSVValidator{}
+func NewCSVValidator(csvs ...*v1alpha1.ClusterServiceVersion) validator.Validator {
+	val := csvValidator{csvs: map[string]*v1alpha1.ClusterServiceVersion{}}
+	for _, csv := range csvs {
+		val.csvs[csv.GetName()] = csv
+	}
+	return &val
+}
 
-func (v *CSVValidator) Validate() (results []validator.ManifestResult) {
-	for _, csv := range v.csvs {
-		result := csvInspect(csv)
-		if result.Name == "" {
-			result.Name = csv.GetName()
-		}
+func (v *csvValidator) Validate() (results []validator.ManifestResult) {
+	for key, csv := range v.csvs {
+		result := validateCSV(csv)
+		result.Name = key
 		results = append(results, result)
 	}
 	return results
 }
 
-func (v *CSVValidator) AddObjects(objs ...interface{}) validator.Error {
-	for _, o := range objs {
-		switch t := o.(type) {
-		case v1alpha1.ClusterServiceVersion:
-			v.csvs = append(v.csvs, t)
-		case *v1alpha1.ClusterServiceVersion:
-			v.csvs = append(v.csvs, *t)
-		}
-	}
-	return validator.Error{}
-}
-
-func (v CSVValidator) Name() string {
+func (v csvValidator) Name() string {
 	return "ClusterServiceVersion Validator"
 }
 
-func (v CSVValidator) FileName() string {
-	return v.fileName
-}
-
-func (v CSVValidator) Unmarshal(rawYaml []byte) (interface{}, error) {
-	var csv v1alpha1.ClusterServiceVersion
-
-	rawJson, err := yaml.YAMLToJSON(rawYaml)
-	if err != nil {
-		return v1alpha1.ClusterServiceVersion{}, fmt.Errorf("error parsing raw YAML to Json: %s", err)
-	}
-	if err := json.Unmarshal(rawJson, &csv); err != nil {
-		return v1alpha1.ClusterServiceVersion{}, fmt.Errorf("error parsing CSV (JSON) : %s", err)
-	}
-	return csv, nil
-}
-
 // Iterates over the given CSV. Returns a ManifestResult type object.
-func csvInspect(csv v1alpha1.ClusterServiceVersion) validator.ManifestResult {
+func validateCSV(csv *v1alpha1.ClusterServiceVersion) validator.ManifestResult {
 
 	// validate example annotations ("alm-examples", "olm.examples").
 	manifestResult := validateExamplesAnnotations(csv)
@@ -189,7 +162,7 @@ func isEmptyValue(v reflect.Value) bool {
 
 // validateExamplesAnnotations compares alm/olm example annotations with provided APIs given
 // by Spec.CustomResourceDefinitions.Owned and Spec.APIServiceDefinitions.Owned.
-func validateExamplesAnnotations(csv v1alpha1.ClusterServiceVersion) (manifestResult validator.ManifestResult) {
+func validateExamplesAnnotations(csv *v1alpha1.ClusterServiceVersion) (manifestResult validator.ManifestResult) {
 	var examples []v1beta1.CustomResourceDefinition
 	var annotationsExamples string
 	annotations := csv.ObjectMeta.GetAnnotations()
@@ -231,7 +204,7 @@ func validateExamplesAnnotations(csv v1alpha1.ClusterServiceVersion) (manifestRe
 	return matchGVKProvidedAPIs(parsedExamples, providedAPIs, manifestResult)
 }
 
-func getProvidedAPIs(csv v1alpha1.ClusterServiceVersion, manifestResult validator.ManifestResult) (map[schema.GroupVersionKind]struct{}, validator.ManifestResult) {
+func getProvidedAPIs(csv *v1alpha1.ClusterServiceVersion, manifestResult validator.ManifestResult) (map[schema.GroupVersionKind]struct{}, validator.ManifestResult) {
 	provided := map[schema.GroupVersionKind]struct{}{}
 
 	for _, owned := range csv.Spec.CustomResourceDefinitions.Owned {
@@ -279,7 +252,7 @@ func getManifestResult(errs ...validator.Error) validator.ManifestResult {
 	return validator.ManifestResult{Errors: errList, Warnings: nil}
 }
 
-func validateInstallModes(csv v1alpha1.ClusterServiceVersion, manifestResult validator.ManifestResult) validator.ManifestResult {
+func validateInstallModes(csv *v1alpha1.ClusterServiceVersion, manifestResult validator.ManifestResult) validator.ManifestResult {
 	// var installModeSet v1alpha1.InstallModeSet
 	installModeSet := make(v1alpha1.InstallModeSet)
 	for _, installMode := range csv.Spec.InstallModes {

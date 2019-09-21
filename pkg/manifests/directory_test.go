@@ -1,12 +1,14 @@
-package validate
+package manifests
 
 import (
 	"io/ioutil"
 	"path/filepath"
 	"testing"
 
+	"github.com/operator-framework/api/pkg/validate"
+
+	"github.com/ghodss/yaml"
 	"github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1"
-	yaml "gopkg.in/yaml.v2"
 )
 
 func TestValidateCSV(t *testing.T) {
@@ -33,10 +35,7 @@ func TestValidateCSV(t *testing.T) {
 		if err = yaml.Unmarshal(b, &csv); err != nil {
 			t.Fatalf("Error unmarshalling CSV at path %s: %v", c.inputCSVPath, err)
 		}
-		v := &CSVValidator{
-			fileName: c.inputCSVPath,
-			csvs:     []v1alpha1.ClusterServiceVersion{csv},
-		}
+		v := validate.NewCSVValidator(&csv)
 		results := v.Validate()
 		if len(results) != 0 {
 			if numResults := len(results); numResults != 1 {

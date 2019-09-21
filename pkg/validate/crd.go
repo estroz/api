@@ -15,11 +15,16 @@ import (
 )
 
 type crdValidator struct {
-	fileNames []string
-	crds      map[appregistry.CRDKey]*v1beta1.CustomResourceDefinition
+	crds map[appregistry.CRDKey]*v1beta1.CustomResourceDefinition
 }
 
-var _ validator.Validator = &crdValidator{}
+func NewCRDValidator(crds ...*v1beta1.CustomResourceDefinition) validator.Validator {
+	val := crdValidator{crds: map[appregistry.CRDKey]*v1beta1.CustomResourceDefinition{}}
+	for _, crd := range crds {
+		val.crds[apiKey(crd)] = crd
+	}
+	return &val
+}
 
 func (v *crdValidator) Validate() (results []validator.ManifestResult) {
 	for key, crd := range v.crds {
@@ -28,18 +33,6 @@ func (v *crdValidator) Validate() (results []validator.ManifestResult) {
 		results = append(results, result)
 	}
 	return results
-}
-
-func (v *crdValidator) AddObjects(objs ...interface{}) validator.Error {
-	for _, o := range objs {
-		switch t := o.(type) {
-		case v1beta1.CustomResourceDefinition:
-			v.crds[apiKey(&t)] = &t
-		case *v1beta1.CustomResourceDefinition:
-			v.crds[apiKey(t)] = t
-		}
-	}
-	return validator.Error{}
 }
 
 func apiKey(v *v1beta1.CustomResourceDefinition) appregistry.CRDKey {
@@ -59,14 +52,6 @@ func apiKey(v *v1beta1.CustomResourceDefinition) appregistry.CRDKey {
 
 func (v crdValidator) Name() string {
 	return "CustomResourceDefinition Validator"
-}
-
-func (v crdValidator) FileName() string {
-	return ""
-}
-
-func (v crdValidator) ObjectNames() []string {
-	return v.fileNames
 }
 
 // removeme

@@ -1,71 +1,35 @@
 package validate
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/operator-framework/api/pkg/validate/validator"
-	"github.com/ghodss/yaml"
-	"github.com/operator-framework/operator-lifecycle-manager/pkg/controller/registry"
+	"github.com/operator-framework/operator-registry/pkg/registry"
 )
 
-type PackageValidator struct {
-	fileName string
-	pkgs     []registry.PackageManifest
+type packageValidator struct {
+	pkgs map[string]registry.PackageManifest
 }
 
-var _ validator.Validator = &PackageValidator{}
-
-// packageManifest is an alias of `registry.PackageManifest` used
-// to define new methods on the non-local type.
-type packageManifest registry.PackageManifest
-
-func (p packageManifest) getPkgName() string {
-	return p.PackageName
+func NewPackageManifestValidator(pkgs ...registry.PackageManifest) validator.Validator {
+	val := packageValidator{pkgs: map[string]registry.PackageManifest{}}
+	for _, pkg := range pkgs {
+		val.pkgs[pkg.PackageName] = pkg
+	}
+	return &val
 }
 
-func (v *PackageValidator) Validate() (results []validator.ManifestResult) {
-	for _, pkg := range v.pkgs {
+func (v *packageValidator) Validate() (results []validator.ManifestResult) {
+	for key, pkg := range v.pkgs {
 		result := pkgInspect(pkg)
-		if result.Name == "" {
-			result.Name = packageManifest(pkg).getPkgName()
-		}
+		result.Name = key
 		results = append(results, result)
 	}
 	return results
 }
 
-func (v *PackageValidator) AddObjects(objs ...interface{}) validator.Error {
-	for _, o := range objs {
-		switch t := o.(type) {
-		case registry.PackageManifest:
-			v.pkgs = append(v.pkgs, t)
-		case *registry.PackageManifest:
-			v.pkgs = append(v.pkgs, *t)
-		}
-	}
-	return validator.Error{}
-}
-
-func (v PackageValidator) Name() string {
+func (v packageValidator) Name() string {
 	return "Package Validator"
-}
-
-func (v PackageValidator) FileName() string {
-	return v.fileName
-}
-
-func (v PackageValidator) Unmarshal(rawYaml []byte) (interface{}, error) {
-	var pkg registry.PackageManifest
-
-	rawJson, err := yaml.YAMLToJSON(rawYaml)
-	if err != nil {
-		return registry.PackageManifest{}, fmt.Errorf("error parsing raw YAML to Json: %s", err)
-	}
-	if err := json.Unmarshal(rawJson, &pkg); err != nil {
-		return registry.PackageManifest{}, fmt.Errorf("error parsing package type (JSON) : %s", err)
-	}
-	return pkg, nil
 }
 
 func pkgInspect(pkg registry.PackageManifest) (manifestResult validator.ManifestResult) {

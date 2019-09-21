@@ -8,45 +8,32 @@ type Validator interface {
 	// a one ManifestResult for each object that did not pass validation.
 	// TODO: use pointers
 	Validate() []ManifestResult
-	// AddObjects adds objects to the Validator. Each object will be validated
-	// when Validate() is called.
-	AddObjects(...interface{}) Error
 	// Name should return a succinct name for this validator.
 	Name() string
-	// FileName returns the file name of the object to be validated.
-	FileName() string
-	// Unmarshal returns the unmarshalled object of caller's underlying type.
-	Unmarshal([]byte) (interface{}, error)
 }
 
-// ValidatorSet contains a set of Validators to be executed sequentially.
+// Validators contains a list of Validators to be executed sequentially.
 // TODO: add configurable logger.
-type ValidatorSet struct {
-	validators []Validator
-}
+type Validators []Validator
 
-// NewValidatorSet creates a ValidatorSet containing vs.
-func NewValidatorSet(vs ...Validator) *ValidatorSet {
-	set := &ValidatorSet{}
-	set.AddValidators(vs...)
-	return set
+// NewValidatorSet creates a Validators containing vs.
+func NewValidatorSet(vs ...Validator) Validators {
+	vals := Validators{}
+	vals.AddValidators(vs...)
+	return vals
 }
 
 // AddValidators adds each unique Validator in vs to the receiver.
-func (set *ValidatorSet) AddValidators(vs ...Validator) {
-	seenNames := map[string]struct{}{}
+func (vals Validators) AddValidators(vs ...Validator) {
 	for _, v := range vs {
-		if _, seen := seenNames[v.Name()]; !seen {
-			set.validators = append(set.validators, v)
-			seenNames[v.Name()] = struct{}{}
-		}
+		vals = append(vals, v)
 	}
 }
 
 // ValidateAll runs each Validator in the receiver and returns all results.
-func (set ValidatorSet) ValidateAll() (allResults []ManifestResult) {
-	for _, v := range set.validators {
-		results := v.Validate()
+func (vals Validators) ValidateAll() (allResults []ManifestResult) {
+	for _, val := range vals {
+		results := val.Validate()
 		allResults = append(allResults, results...)
 	}
 	return allResults

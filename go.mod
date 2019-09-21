@@ -22,16 +22,22 @@ replace (
 )
 
 require (
+	github.com/blang/semver v3.5.1+incompatible
 	github.com/ghodss/yaml v1.0.0
+	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/operator-framework/operator-lifecycle-manager v0.0.0-20190725173916-b56e63a643cc
-	github.com/prometheus/common v0.0.0-20190104105734-b1c43a6df3ae // indirect
-	github.com/prometheus/procfs v0.0.0-20190104112138-b1a0a9a36d74 // indirect
+	github.com/operator-framework/operator-registry v1.1.1
+	github.com/pkg/errors v0.8.1
+	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.5
-	google.golang.org/genproto v0.0.0-20181016170114-94acd270e44e // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	gopkg.in/yaml.v2 v2.2.2
 	k8s.io/apiextensions-apiserver v0.0.0-20181204003618-e419c5771cdc
 	k8s.io/apimachinery v0.0.0-20190717022731-0bb8574e0887
-	sigs.k8s.io/yaml v1.1.0
+	k8s.io/client-go v8.0.0+incompatible
 )
+
+// TODO(estroz): change this to point to the main repo once
+// https://github.com/operator-framework/operator-registry/pull/86
+// is addressed, and remove entirely on a new release.
+replace github.com/operator-framework/operator-registry => github.com/estroz/operator-registry v1.3.1-0.20190912000639-78e83c9070d6
