@@ -1,4 +1,4 @@
-package validate
+package validation
 
 import (
 	"encoding/json"
@@ -6,7 +6,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/operator-framework/api/pkg/validate/validator"
+	"github.com/operator-framework/api/pkg/validation/validator"
+
 	"github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime/schema"

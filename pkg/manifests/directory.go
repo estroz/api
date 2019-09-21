@@ -2,8 +2,8 @@ package manifests
 
 import (
 	internal "github.com/operator-framework/api/pkg/internal"
-	"github.com/operator-framework/api/pkg/validate"
-	"github.com/operator-framework/api/pkg/validate/validator"
+	"github.com/operator-framework/api/pkg/validation"
+	"github.com/operator-framework/api/pkg/validation/validator"
 
 	"github.com/operator-framework/operator-registry/pkg/registry"
 	"github.com/sirupsen/logrus"
@@ -19,7 +19,7 @@ func GetManifestsDir(manifestDirectory string) (registry.PackageManifest, []*reg
 	pkg := manifests.GetPackageManifest()
 	bundles := manifests.GetBundles()
 	// validate bundle
-	val := validate.NewBundleValidator(pkg, bundles...)
+	val := validation.NewBundleValidator(pkg, bundles...)
 	results := val.Validate()
 	return pkg, bundles, results
 }

@@ -1,12 +1,13 @@
-package validate
+package validation
 
 import (
 	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/operator-framework/api/pkg/validation/validator"
+
 	"github.com/ghodss/yaml"
-	"github.com/operator-framework/api/pkg/validate/validator"
 	"github.com/operator-framework/operator-registry/pkg/appregistry"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"

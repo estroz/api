@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/operator-framework/api/pkg/validate"
+	"github.com/operator-framework/api/pkg/validation"
 
 	"github.com/ghodss/yaml"
 	"github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1"
@@ -35,7 +35,7 @@ func TestValidateCSV(t *testing.T) {
 		if err = yaml.Unmarshal(b, &csv); err != nil {
 			t.Fatalf("Error unmarshalling CSV at path %s: %v", c.inputCSVPath, err)
 		}
-		v := validate.NewCSVValidator(&csv)
+		v := validation.NewCSVValidator(&csv)
 		results := v.Validate()
 		if len(results) != 0 {
 			if numResults := len(results); numResults != 1 {

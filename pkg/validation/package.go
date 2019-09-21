@@ -1,9 +1,10 @@
-package validate
+package validation
 
 import (
 	"fmt"
 
-	"github.com/operator-framework/api/pkg/validate/validator"
+	"github.com/operator-framework/api/pkg/validation/validator"
+
 	"github.com/operator-framework/operator-registry/pkg/registry"
 )
 

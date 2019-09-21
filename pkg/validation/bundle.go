@@ -1,12 +1,12 @@
-package validate
+package validation
 
 import (
 	"encoding/json"
 	"fmt"
 	"log"
 
-	"github.com/operator-framework/api/pkg/validate/validator"
-	"github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1"
+	"github.com/operator-framework/api/pkg/validation/validator"
+
 	olmapiv1alpha1 "github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1"
 	"github.com/operator-framework/operator-registry/pkg/registry"
 	"github.com/sirupsen/logrus"
@@ -99,7 +99,7 @@ func checkDefaultChannelInBundle(pkg registry.PackageManifest, csvsInBundle []st
 	return manifestResult
 }
 
-func validateOwnedCRDs(bundle *registry.Bundle, csv *v1alpha1.ClusterServiceVersion, manifestResult validator.ManifestResult) validator.ManifestResult {
+func validateOwnedCRDs(bundle *registry.Bundle, csv *olmapiv1alpha1.ClusterServiceVersion, manifestResult validator.ManifestResult) validator.ManifestResult {
 	ownedCrdNames := getOwnedCustomResourceDefintionNames(csv)
 	bundleCrdNames, err := getBundleCRDNames(bundle)
 	if err != (validator.Error{}) {
@@ -124,7 +124,7 @@ func validateOwnedCRDs(bundle *registry.Bundle, csv *v1alpha1.ClusterServiceVers
 	return manifestResult
 }
 
-func getOwnedCustomResourceDefintionNames(csv *v1alpha1.ClusterServiceVersion) []string {
+func getOwnedCustomResourceDefintionNames(csv *olmapiv1alpha1.ClusterServiceVersion) []string {
 	var names []string
 	for _, ownedCrd := range csv.Spec.CustomResourceDefinitions.Owned {
 		names = append(names, ownedCrd.Name)
