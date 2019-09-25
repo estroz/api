@@ -51,18 +51,21 @@ func validateCSV(csv *operatorsv1alpha1.ClusterServiceVersion) errors.ManifestRe
 	result.Add(validateExamplesAnnotations(csv)...)
 	// validate installModes
 	result.Add(validateInstallModes(csv)...)
-
 	// check missing optional/mandatory fields.
-	fieldValue := reflect.ValueOf(csv)
-	if fieldValue.Kind() == reflect.Struct {
-		checkMissingFields(&result, fieldValue, "")
-	}
+	result.Add(checkFields(csv)...)
 	return result
+}
+
+// checkFields runs checkMissingFields and returns its errors.
+func checkFields(csv *operatorsv1alpha1.ClusterServiceVersion) (errs []errors.Error) {
+	result := errors.ManifestResult{}
+	checkMissingFields(&result, reflect.ValueOf(csv), "")
+	return append(result.Errors, result.Warnings...)
 }
 
 // Recursive function that traverses a nested struct passed in as reflect value, and reports for errors/warnings
 // in case of null struct field values.
-func checkMissingFields(log *errors.ManifestResult, v reflect.Value, parentStructName string) {
+func checkMissingFields(result *errors.ManifestResult, v reflect.Value, parentStructName string) {
 	if v.Kind() != reflect.Struct {
 		return
 	}
@@ -90,27 +93,27 @@ func checkMissingFields(log *errors.ManifestResult, v reflect.Value, parentStruc
 
 		switch fieldValue.Kind() {
 		case reflect.Struct:
-			updateLog(log, "struct", newParentStructName, emptyVal, isOptionalField)
+			updateLog(result, "struct", newParentStructName, emptyVal, isOptionalField)
 			if !emptyVal {
-				checkMissingFields(log, fieldValue, newParentStructName)
+				checkMissingFields(result, fieldValue, newParentStructName)
 			}
 		default:
-			updateLog(log, "field", newParentStructName, emptyVal, isOptionalField)
+			updateLog(result, "field", newParentStructName, emptyVal, isOptionalField)
 		}
 	}
 }
 
 // Returns updated error log with missing optional/mandatory field/struct objects.
-func updateLog(log *errors.ManifestResult, typeName string, newParentStructName string, emptyVal bool, isOptionalField bool) {
-
-	if emptyVal && isOptionalField {
+func updateLog(result *errors.ManifestResult, typeName string, newParentStructName string, emptyVal bool, isOptionalField bool) {
+	if !emptyVal {
+		return
+	}
+	if isOptionalField {
 		// TODO: update the value field (typeName).
-		log.Add(errors.WarnFieldMissing("", newParentStructName, typeName))
-	} else if emptyVal && !isOptionalField {
-		if newParentStructName != "Status" {
-			// TODO: update the value field (typeName).
-			log.Add(errors.ErrFieldMissing("", newParentStructName, typeName))
-		}
+		result.Add(errors.WarnFieldMissing("", newParentStructName, typeName))
+	} else if newParentStructName != "Status" {
+		// TODO: update the value field (typeName).
+		result.Add(errors.ErrFieldMissing("", newParentStructName, typeName))
 	}
 }
 
