@@ -1,17 +1,20 @@
-package validation
+package internal
 
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
 
 	"github.com/operator-framework/api/pkg/validation/errors"
 	interfaces "github.com/operator-framework/api/pkg/validation/interfaces"
+	"github.com/operator-framework/operator-registry/pkg/registry"
 
 	operatorsv1alpha1 "github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1"
-	apiextv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
 type CSVValidator struct{}
@@ -23,28 +26,36 @@ func (f CSVValidator) GetFuncs(objs ...interface{}) (funcs interfaces.ValidatorF
 			funcs = append(funcs, func() errors.ManifestResult {
 				return validateCSV(v)
 			})
+		case *registry.ClusterServiceVersion:
+			funcs = append(funcs, func() errors.ManifestResult {
+				return validateCSVRegistry(v)
+			})
 		}
 	}
 	return funcs
 }
 
+func validateCSVRegistry(bcsv *registry.ClusterServiceVersion) (result errors.ManifestResult) {
+	csv, err := bundleCSVToCSV(bcsv)
+	if err != (errors.Error{}) {
+		result.Add(err)
+		return result
+	}
+	return validateCSV(csv)
+}
+
 // Iterates over the given CSV. Returns a ManifestResult type object.
 func validateCSV(csv *operatorsv1alpha1.ClusterServiceVersion) errors.ManifestResult {
 	result := errors.ManifestResult{Name: csv.GetName()}
-
 	// validate example annotations ("alm-examples", "olm.examples").
 	result.Add(validateExamplesAnnotations(csv)...)
-
 	// validate installModes
 	result.Add(validateInstallModes(csv)...)
 
 	// check missing optional/mandatory fields.
 	fieldValue := reflect.ValueOf(csv)
-
-	switch fieldValue.Kind() {
-	case reflect.Struct:
+	if fieldValue.Kind() == reflect.Struct {
 		checkMissingFields(&result, fieldValue, "")
-		return result
 	}
 	return result
 }
@@ -52,26 +63,29 @@ func validateCSV(csv *operatorsv1alpha1.ClusterServiceVersion) errors.ManifestRe
 // Recursive function that traverses a nested struct passed in as reflect value, and reports for errors/warnings
 // in case of null struct field values.
 func checkMissingFields(log *errors.ManifestResult, v reflect.Value, parentStructName string) {
+	if v.Kind() != reflect.Struct {
+		return
+	}
+	typ := v.Type()
 
 	for i := 0; i < v.NumField(); i++ {
-
 		fieldValue := v.Field(i)
+		fieldType := typ.Field(i)
 
-		tag := v.Type().Field(i).Tag.Get("json")
+		tag := fieldType.Tag.Get("json")
 		// Ignore fields that are subsets of a primitive field.
 		if tag == "" {
 			continue
 		}
 
-		fields := strings.Split(tag, ",")
-		isOptionalField := containsStrict(fields, "omitempty")
+		// Omitted field tags will contain ",omitempty", and ignored tags will
+		// match "-" exactly, respectively.
+		isOptionalField := strings.Contains(tag, ",omitempty") || tag == "-"
 		emptyVal := isEmptyValue(fieldValue)
 
-		newParentStructName := ""
-		if parentStructName == "" {
-			newParentStructName = v.Type().Field(i).Name
-		} else {
-			newParentStructName = parentStructName + "." + v.Type().Field(i).Name
+		newParentStructName := fieldType.Name
+		if parentStructName != "" {
+			newParentStructName = parentStructName + "." + newParentStructName
 		}
 
 		switch fieldValue.Kind() {
@@ -100,18 +114,8 @@ func updateLog(log *errors.ManifestResult, typeName string, newParentStructName 
 	}
 }
 
-// Takes in a string slice and checks if a string (x) is present in the slice.
-// Return true if the string is present in the slice.
-func containsStrict(a []string, x string) bool {
-	for _, n := range a {
-		if x == n {
-			return true
-		}
-	}
-	return false
-}
-
 // Uses reflect package to check if the value of the object passed is null, returns a boolean accordingly.
+// TODO: replace with reflect.Kind.IsZero() in go 1.13
 func isEmptyValue(v reflect.Value) bool {
 	switch v.Kind() {
 	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
@@ -148,8 +152,6 @@ func isEmptyValue(v reflect.Value) bool {
 // validateExamplesAnnotations compares alm/olm example annotations with provided APIs given
 // by Spec.CustomResourceDefinitions.Owned and Spec.APIServiceDefinitions.Owned.
 func validateExamplesAnnotations(csv *operatorsv1alpha1.ClusterServiceVersion) (errs []errors.Error) {
-	var examples []apiextv1beta1.CustomResourceDefinition
-	var annotationsExamples string
 	annotations := csv.ObjectMeta.GetAnnotations()
 	// Return right away if no examples annotations are found.
 	if len(annotations) == 0 {
@@ -158,37 +160,35 @@ func validateExamplesAnnotations(csv *operatorsv1alpha1.ClusterServiceVersion) (
 	}
 	// Expect either `alm-examples` or `olm.examples` but not both
 	// If both are present, `alm-examples` will be used
-	if value, ok := annotations["alm-examples"]; ok {
-		annotationsExamples = value
-		if _, ok = annotations["olm.examples"]; ok {
-			// both `alm-examples` and `olm.examples` are present
-			errs = append(errs, errors.WarnInvalidCSV("both `alm-examples` and `olm.examples` are present. Checking only `alm-examples`", csv.GetName()))
-		}
-	} else {
-		annotationsExamples = annotations["olm.examples"]
-	}
-
-	// Can't find examples annotations, simply return
-	if annotationsExamples == "" {
+	var examplesString string
+	almExamples, almOK := annotations["alm-examples"]
+	olmExamples, olmOK := annotations["olm.examples"]
+	if !almOK && !olmOK {
 		errs = append(errs, errors.WarnInvalidCSV("example annotations not found", csv.GetName()))
 		return errs
+	} else if almOK {
+		if olmOK {
+			errs = append(errs, errors.WarnInvalidCSV("both `alm-examples` and `olm.examples` are present. Checking only `alm-examples`", csv.GetName()))
+		}
+		examplesString = almExamples
+	} else {
+		examplesString = olmExamples
 	}
-
-	if err := json.Unmarshal([]byte(annotationsExamples), &examples); err != nil {
-		errs = append(errs, errors.ErrInvalidParse(fmt.Sprintf("parsing example annotations to %T type:  %s ", examples, err), nil))
+	us := []unstructured.Unstructured{}
+	dec := yaml.NewYAMLOrJSONDecoder(strings.NewReader(examplesString), 8)
+	if err := dec.Decode(&us); err != nil && err != io.EOF {
+		errs = append(errs, errors.ErrInvalidParse("error decoding example CustomResource", err))
 		return errs
+	}
+	parsed := map[schema.GroupVersionKind]struct{}{}
+	for _, u := range us {
+		parsed[u.GetObjectKind().GroupVersionKind()] = struct{}{}
 	}
 
 	providedAPIs, aerrs := getProvidedAPIs(csv)
 	errs = append(errs, aerrs...)
 
-	parsedExamples, perrs := parseExamplesAnnotations(examples)
-	if len(perrs) != 0 {
-		errs = append(errs, perrs...)
-		return errs
-	}
-
-	errs = append(errs, matchGVKProvidedAPIs(parsedExamples, providedAPIs)...)
+	errs = append(errs, matchGVKProvidedAPIs(parsed, providedAPIs)...)
 	return errs
 }
 
@@ -197,31 +197,21 @@ func getProvidedAPIs(csv *operatorsv1alpha1.ClusterServiceVersion) (provided map
 	for _, owned := range csv.Spec.CustomResourceDefinitions.Owned {
 		parts := strings.SplitN(owned.Name, ".", 2)
 		if len(parts) < 2 {
-			errs = append(errs, errors.ErrInvalidParse(fmt.Sprintf("couldn't parse plural.group from crd name: %s", owned.Name), owned.Name))
+			errs = append(errs, errors.ErrInvalidParse(fmt.Sprintf("couldn't parse plural.group from crd name: %s", owned.Name), nil))
 			continue
 		}
-		provided[schema.GroupVersionKind{Group: parts[1], Version: owned.Version, Kind: owned.Kind}] = struct{}{}
+		provided[newGVK(parts[1], owned.Version, owned.Kind)] = struct{}{}
 	}
 
 	for _, api := range csv.Spec.APIServiceDefinitions.Owned {
-		provided[schema.GroupVersionKind{Group: api.Group, Version: api.Version, Kind: api.Kind}] = struct{}{}
+		provided[newGVK(api.Group, api.Version, api.Kind)] = struct{}{}
 	}
 
 	return provided, errs
 }
 
-func parseExamplesAnnotations(examples []apiextv1beta1.CustomResourceDefinition) (parsed map[schema.GroupVersionKind]struct{}, errs []errors.Error) {
-	parsed = map[schema.GroupVersionKind]struct{}{}
-	for _, value := range examples {
-		parts := strings.SplitN(value.APIVersion, "/", 2)
-		if len(parts) < 2 {
-			errs = append(errs, errors.ErrInvalidParse(fmt.Sprintf("couldn't parse group/version from crd kind: %s", value.Kind), value.Kind))
-			continue
-		}
-		parsed[schema.GroupVersionKind{Group: parts[0], Version: parts[1], Kind: value.Kind}] = struct{}{}
-	}
-
-	return parsed, errs
+func newGVK(g, v, k string) schema.GroupVersionKind {
+	return schema.GroupVersionKind{Group: g, Version: v, Kind: k}
 }
 
 func matchGVKProvidedAPIs(examples map[schema.GroupVersionKind]struct{}, providedAPIs map[schema.GroupVersionKind]struct{}) (errs []errors.Error) {
@@ -234,34 +224,24 @@ func matchGVKProvidedAPIs(examples map[schema.GroupVersionKind]struct{}, provide
 }
 
 func validateInstallModes(csv *operatorsv1alpha1.ClusterServiceVersion) (errs []errors.Error) {
-	// var installModeSet operatorsv1alpha1.InstallModeSet
-	installModeSet := make(operatorsv1alpha1.InstallModeSet)
-	for _, installMode := range csv.Spec.InstallModes {
-		if _, ok := installModeSet[installMode.Type]; ok {
-			errs = append(errs, errors.ErrInvalidCSV("duplicate install modes present", csv.GetName()))
-		} else {
-			installModeSet[installMode.Type] = installMode.Supported
-		}
-	}
-
-	// installModes not found, return with a warning
-	if len(installModeSet) == 0 {
-		errs = append(errs, errors.WarnInvalidCSV("install modes not found", csv.GetName()))
+	if len(csv.Spec.InstallModes) == 0 {
+		errs = append(errs, errors.ErrInvalidCSV("install modes not found", csv.GetName()))
 		return errs
 	}
 
+	installModeSet := operatorsv1alpha1.InstallModeSet{}
+	anySupported := false
+	for _, installMode := range csv.Spec.InstallModes {
+		if _, ok := installModeSet[installMode.Type]; ok {
+			errs = append(errs, errors.ErrInvalidCSV("duplicate install modes present", csv.GetName()))
+		} else if installMode.Supported {
+			anySupported = true
+		}
+	}
+
 	// all installModes should not be `false`
-	if checkAllFalseForInstallModeSet(installModeSet) {
+	if !anySupported {
 		errs = append(errs, errors.ErrInvalidCSV("none of InstallModeTypes are supported", csv.GetName()))
 	}
 	return errs
-}
-
-func checkAllFalseForInstallModeSet(installModeSet operatorsv1alpha1.InstallModeSet) bool {
-	for _, isSupported := range installModeSet {
-		if isSupported {
-			return false
-		}
-	}
-	return true
 }

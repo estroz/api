@@ -1,4 +1,4 @@
-package validation
+package internal
 
 import (
 	"strings"
@@ -6,7 +6,6 @@ import (
 	"github.com/operator-framework/api/pkg/validation/errors"
 	interfaces "github.com/operator-framework/api/pkg/validation/interfaces"
 
-	"github.com/operator-framework/operator-registry/pkg/appregistry"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextv1beta "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/validation"
@@ -39,28 +38,14 @@ func (f CRDValidator) GetFuncs(objs ...interface{}) (funcs interfaces.ValidatorF
 	return funcs
 }
 
-func apiKey(v *apiextv1beta.CustomResourceDefinition) appregistry.CRDKey {
-	// TODO: support multiple versions.
-	key := appregistry.CRDKey{Name: v.GetName(), Kind: v.Spec.Names.Kind}
-	key.Version = v.Spec.Version
-	if key.Version == "" {
-		if len(v.Spec.Versions) == 0 {
-			// QUESTION: is this unique enough, or should we just return an error
-			key.Version = "badVer" + key.String()
-		} else {
-			key.Version = v.Spec.Versions[0].Name
-		}
-	}
-	return key
-}
-
-func validateCRD(crd interface{}) errors.ManifestResult {
+func validateCRD(crd interface{}) (result errors.ManifestResult) {
 	unversionedCRD := apiextensions.CustomResourceDefinition{}
 	err := Scheme.Converter().Convert(&crd, &unversionedCRD, conversion.SourceToDest, nil)
 	if err != nil {
-		return errors.ManifestResult{Errors: []errors.Error{errors.ErrInvalidParse(err.Error(), nil)}}
+		result.Add(errors.ErrInvalidParse("error converting versioned crd to unversioned crd", err))
+		return result
 	}
-	result := validateCRD(&unversionedCRD)
+	result = validateCRD(&unversionedCRD)
 	result.Name = unversionedCRD.GetName()
 	return result
 }

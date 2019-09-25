@@ -33,22 +33,29 @@ type Validators []Validator
 // - Uses more than one Validator in one call.
 // - Want active validation.
 func (vals Validators) Apply(objs ...interface{}) (results []errors.ManifestResult) {
+	if len(vals) == 0 {
+		return nil
+	}
 	if len(vals) == 1 {
 		return vals[0].GetFuncs(objs...).runP()
 	}
-	queue := make(chan errors.ManifestResult, 1)
+	queue := make(chan []errors.ManifestResult, 1)
 	wg := &sync.WaitGroup{}
 	wg.Add(len(vals))
 	for _, val := range vals {
 		go func(v Validator) {
+			funcResults := []errors.ManifestResult{}
 			for _, result := range v.GetFuncs(objs...).runP() {
-				queue <- result
+				if result.HasError() || result.HasWarn() {
+					funcResults = append(funcResults, result)
+				}
 			}
+			queue <- funcResults
 		}(val)
 	}
 	go func() {
-		for result := range queue {
-			results = append(results, result)
+		for funcResults := range queue {
+			results = append(results, funcResults...)
 			wg.Done()
 		}
 	}()
@@ -58,6 +65,9 @@ func (vals Validators) Apply(objs ...interface{}) (results []errors.ManifestResu
 
 // runP runs all funcs in parallel.
 func (funcs ValidatorFuncs) runP() (results []errors.ManifestResult) {
+	if len(funcs) == 0 {
+		return nil
+	}
 	if len(funcs) == 1 {
 		results = append(results, funcs[0]())
 	}
@@ -66,7 +76,9 @@ func (funcs ValidatorFuncs) runP() (results []errors.ManifestResult) {
 	wg.Add(len(funcs))
 	for _, validate := range funcs {
 		go func(f ValidatorFunc) {
-			queue <- f()
+			if result := f(); result.HasError() || result.HasWarn() {
+				queue <- result
+			}
 		}(validate)
 	}
 	go func() {

@@ -1,4 +1,4 @@
-package validation
+package internal
 
 import (
 	"fmt"
@@ -7,7 +7,6 @@ import (
 	interfaces "github.com/operator-framework/api/pkg/validation/interfaces"
 
 	"github.com/operator-framework/operator-registry/pkg/registry"
-	"github.com/sirupsen/logrus"
 )
 
 type ManifestsValidator struct{}
@@ -38,10 +37,14 @@ func validateManifests(pkg *registry.PackageManifest, bundles []*registry.Bundle
 	for _, bundle := range bundles {
 		bcsv, err := bundle.ClusterServiceVersion()
 		if err != nil {
-			logrus.Fatal(err)
-			return errors.ManifestResult{}
+			result.Add(errors.ErrInvalidParse("error getting bundle CSV", err))
+			return result
 		}
-		csv := mustBundleCSVToCSV(bcsv)
+		csv, rerr := bundleCSVToCSV(bcsv)
+		if rerr != (errors.Error{}) {
+			result.Add(rerr)
+			return result
+		}
 		if csv.Spec.Replaces == "" {
 			result.Add(errors.WarnInvalidCSV("`spec.replaces` field not present. If this csv replaces an old version, populate this field with the `metadata.Name` of the old csv", csv.GetName()))
 		} else if csv.GetName() == csv.Spec.Replaces {
@@ -53,7 +56,7 @@ func validateManifests(pkg *registry.PackageManifest, bundles []*registry.Bundle
 	}
 	for replaces, sourceCSV := range replacesNames {
 		if _, csvExists := csvNames[replaces]; !csvExists {
-			result.Add(errors.ErrInvalidCSV(fmt.Sprintf("`%s` mentioned in the `spec.replaces` field is not present in manifests", replaces), sourceCSV))
+			result.Add(errors.ErrInvalidCSV(fmt.Sprintf("%q mentioned in the `spec.replaces` field is not present in manifests", replaces), sourceCSV))
 		}
 	}
 	result.Add(checkDefaultChannelInBundle(pkg, csvNames)...)
@@ -63,7 +66,7 @@ func validateManifests(pkg *registry.PackageManifest, bundles []*registry.Bundle
 func checkDefaultChannelInBundle(pkg *registry.PackageManifest, csvNames map[string]struct{}) (errs []errors.Error) {
 	for _, channel := range pkg.Channels {
 		if _, csvExists := csvNames[channel.CurrentCSVName]; !csvExists {
-			errs = append(errs, errors.ErrInvalidBundle(fmt.Sprintf("currentCSV `%s` for channel name `%s` in package `%s` not found in bundle", channel.CurrentCSVName, channel.Name, pkg.PackageName), channel.CurrentCSVName))
+			errs = append(errs, errors.ErrInvalidBundle(fmt.Sprintf("currentCSV %q for channel name %q in package %q not found in bundle", channel.CurrentCSVName, channel.Name, pkg.PackageName), channel.CurrentCSVName))
 		}
 	}
 	return errs

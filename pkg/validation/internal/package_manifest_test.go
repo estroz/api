@@ -1,22 +1,9 @@
-// Copyright 2019 The Operator-SDK Authors
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-package validation
+package internal
 
 import (
 	"testing"
 
+	"github.com/operator-framework/api/pkg/validation/errors"
 	"github.com/operator-framework/operator-registry/pkg/registry"
 )
 
@@ -24,67 +11,72 @@ func TestValidatePackageManifest(t *testing.T) {
 	channels := []registry.PackageChannel{
 		{Name: "foo", CurrentCSVName: "bar"},
 	}
-	pm := registry.PackageManifest{
+	pkgName := "test-package"
+	pkg := registry.PackageManifest{
 		Channels:           channels,
-		DefaultChannelName: "baz",
-		PackageName:        "test-package",
+		DefaultChannelName: "foo",
+		PackageName:        pkgName,
 	}
 
 	cases := []struct {
-		description string
-		wantErr     bool
-		errMsg      string
-		operation   func(*registry.PackageManifest)
+		validatorFuncTest
+		operation func(*registry.PackageManifest)
 	}{
 		{
-			"default channel does not exist",
-			true, `default channel "baz" does not exist in channels`, nil,
+			validatorFuncTest{
+				description: "successful validation",
+			},
+			nil,
 		},
 		{
-			"successful validation",
-			false, "",
-			func(pm *registry.PackageManifest) {
-				pm.DefaultChannelName = pm.Channels[0].Name
+			validatorFuncTest{
+				description: "default channel does not exist in channels",
+				wantErr:     true,
+				errors: []errors.Error{
+					errors.ErrInvalidPackageManifest(`default channel "baz" not found in the list of declared channels`, pkgName),
+				},
+				numErrs: 1,
+			},
+			func(pkg *registry.PackageManifest) {
+				pkg.DefaultChannelName = "baz"
 			},
 		},
 		{
-			"channels are empty",
-			true, "channels cannot be empty",
-			func(pm *registry.PackageManifest) {
-				pm.Channels = nil
+			validatorFuncTest{
+				description: "one channel's CSVName is empty",
+				wantErr:     true,
+				errors: []errors.Error{
+					errors.ErrInvalidPackageManifest(`channel "foo" currentCSV is empty`, pkgName),
+				},
+				numErrs: 1,
+			},
+			func(pkg *registry.PackageManifest) {
+				pkg.DefaultChannelName = pkg.Channels[0].Name
+				pkg.Channels = make([]registry.PackageChannel, 1)
+				copy(pkg.Channels, channels)
+				pkg.Channels[0].CurrentCSVName = ""
 			},
 		},
 		{
-			"one channel's CSVName is empty",
-			true, `channel "foo" currentCSV cannot be empty`,
-			func(pm *registry.PackageManifest) {
-				pm.Channels = make([]registry.PackageChannel, 1)
-				copy(pm.Channels, channels)
-				pm.Channels[0].CurrentCSVName = ""
+			validatorFuncTest{
+				description: "duplicate channel name",
+				wantErr:     true,
+				errors: []errors.Error{
+					errors.ErrInvalidPackageManifest(`duplicate package manifest channel name "foo"`, pkgName),
+				},
+				numErrs: 1,
 			},
-		},
-		{
-			"duplicate channel name",
-			true, `duplicate package manifest channel name "foo"; channel names must be unique`,
-			func(pm *registry.PackageManifest) {
-				pm.Channels = append(channels, channels...)
+			func(pkg *registry.PackageManifest) {
+				pkg.Channels = append(channels, channels...)
 			},
 		},
 	}
 
 	for _, c := range cases {
 		if c.operation != nil {
-			c.operation(&pm)
+			c.operation(&pkg)
 		}
-		err := validatePackageManifest(&pm)
-		if c.wantErr {
-			if !err.HasError() && !err.HasWarn() {
-				t.Errorf("%s: expected error %q, got nil", c.description, c.errMsg)
-			} else if err.Errors[0].Error() != c.errMsg {
-				t.Errorf("%s: expected error message %q, got:\n%v", c.description, c.errMsg, err)
-			}
-		} else if !err.HasError() && !err.HasWarn() {
-			t.Errorf("%s: expected no error, got errors:\n%v", c.description, err)
-		}
+		result := validatePackageManifest(&pkg)
+		c.check(t, result)
 	}
 }

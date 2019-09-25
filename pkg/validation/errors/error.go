@@ -1,6 +1,8 @@
 package errors
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // ManifestResult represents verification result for each of the yaml files
 // from the operator manifest.
@@ -24,11 +26,11 @@ func (r *ManifestResult) Add(errs ...Error) {
 }
 
 func (r ManifestResult) HasError() bool {
-	return len(r.Errors) == 0
+	return len(r.Errors) != 0
 }
 
 func (r ManifestResult) HasWarn() bool {
-	return len(r.Warnings) == 0
+	return len(r.Warnings) != 0
 }
 
 // QUESTION: use field.Error instead of our own implementation? seems like most

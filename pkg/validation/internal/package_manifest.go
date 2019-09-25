@@ -1,4 +1,4 @@
-package validation
+package internal
 
 import (
 	"fmt"
@@ -44,18 +44,18 @@ func validateChannels(pkg *registry.PackageManifest) (errs []errors.Error) {
 	seen := map[string]struct{}{}
 	for i, c := range pkg.Channels {
 		if c.Name == "" {
-			errs = append(errs, errors.ErrInvalidPackageManifest(fmt.Sprintf("channel %d name cannot be empty", i), pkg.PackageName))
+			errs = append(errs, errors.ErrInvalidPackageManifest(fmt.Sprintf("channel %d name is empty", i), pkg.PackageName))
 		}
 		if c.CurrentCSVName == "" {
-			errs = append(errs, errors.ErrInvalidPackageManifest(fmt.Sprintf("channel %q currentCSV cannot be empty", c.Name), pkg.PackageName))
+			errs = append(errs, errors.ErrInvalidPackageManifest(fmt.Sprintf("channel %q currentCSV is empty", c.Name), pkg.PackageName))
 		}
 		if _, ok := seen[c.Name]; ok {
-			errs = append(errs, errors.ErrInvalidPackageManifest(fmt.Sprintf("duplicate package manifest channel name %q; channel names must be unique", c.Name), pkg.PackageName))
+			errs = append(errs, errors.ErrInvalidPackageManifest(fmt.Sprintf("duplicate package manifest channel name %q", c.Name), pkg.PackageName))
 		}
 		seen[c.Name] = struct{}{}
 	}
 	if _, ok := seen[pkg.DefaultChannelName]; !ok && pkg.DefaultChannelName != "" {
-		errs = append(errs, errors.ErrInvalidPackageManifest(fmt.Sprintf("default channel %s not found in the list of declared channels", pkg.DefaultChannelName), pkg.PackageName))
+		errs = append(errs, errors.ErrInvalidPackageManifest(fmt.Sprintf("default channel %q not found in the list of declared channels", pkg.DefaultChannelName), pkg.PackageName))
 	}
 
 	return errs

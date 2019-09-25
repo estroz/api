@@ -1,16 +1,14 @@
-package validation
+package internal
 
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/operator-framework/api/pkg/validation/errors"
 	interfaces "github.com/operator-framework/api/pkg/validation/interfaces"
 
 	operatorsv1alpha1 "github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1"
 	"github.com/operator-framework/operator-registry/pkg/registry"
-	"github.com/sirupsen/logrus"
 )
 
 type BundleValidator struct{}
@@ -27,72 +25,72 @@ func (f BundleValidator) GetFuncs(objs ...interface{}) (vals interfaces.Validato
 	return vals
 }
 
-func validateBundle(bundle *registry.Bundle) errors.ManifestResult {
+func validateBundle(bundle *registry.Bundle) (result errors.ManifestResult) {
 	bcsv, err := bundle.ClusterServiceVersion()
 	if err != nil {
-		logrus.Fatal(err)
-		return errors.ManifestResult{}
+		result.Add(errors.ErrInvalidParse("error getting bundle CSV", err))
+		return result
 	}
-	csv := mustBundleCSVToCSV(bcsv)
-	result := validateOwnedCRDs(bundle, csv)
+	csv, rerr := bundleCSVToCSV(bcsv)
+	if rerr != (errors.Error{}) {
+		result.Add(rerr)
+		return result
+	}
+	result = validateOwnedCRDs(bundle, csv)
 	result.Name = csv.Spec.Version.String()
 	return result
 }
 
-func mustBundleCSVToCSV(bcsv *registry.ClusterServiceVersion) *operatorsv1alpha1.ClusterServiceVersion {
+func bundleCSVToCSV(bcsv *registry.ClusterServiceVersion) (*operatorsv1alpha1.ClusterServiceVersion, errors.Error) {
 	spec := operatorsv1alpha1.ClusterServiceVersionSpec{}
 	if err := json.Unmarshal(bcsv.Spec, &spec); err != nil {
-		log.Fatalf("Error converting bundle CSV %q type: %v", bcsv.GetName(), err)
+		return nil, errors.ErrInvalidParse(fmt.Sprintf("converting bundle CSV %q", bcsv.GetName()), err)
 	}
 	return &operatorsv1alpha1.ClusterServiceVersion{
 		TypeMeta:   bcsv.TypeMeta,
 		ObjectMeta: bcsv.ObjectMeta,
 		Spec:       spec,
-	}
+	}, errors.Error{}
 }
 
 func validateOwnedCRDs(bundle *registry.Bundle, csv *operatorsv1alpha1.ClusterServiceVersion) (result errors.ManifestResult) {
 	ownedCrdNames := getOwnedCustomResourceDefintionNames(csv)
-	bundleCrdNames, err := getBundleCRDNames(bundle)
+	crdNames, err := getBundleCRDNames(bundle)
 	if err != (errors.Error{}) {
 		result.Add(err)
 		return result
 	}
 
 	// validating names
-	for _, ownedCrd := range ownedCrdNames {
-		if !bundleCrdNames[ownedCrd] {
-			result.Add(errors.ErrInvalidBundle(fmt.Sprintf("owned crd (%s) not found in bundle %s", ownedCrd, bundle.Name), ownedCrd))
+	for _, crdName := range ownedCrdNames {
+		if _, ok := crdNames[crdName]; !ok {
+			result.Add(errors.ErrInvalidBundle(fmt.Sprintf("owned CRD %q not found in bundle %q", crdName, bundle.Name), crdName))
 		} else {
-			delete(bundleCrdNames, ownedCrd)
+			delete(crdNames, crdName)
 		}
 	}
 	// CRDs not defined in the CSV present in the bundle
-	if len(bundleCrdNames) != 0 {
-		for crd, _ := range bundleCrdNames {
-			result.Add(errors.WarnInvalidBundle(fmt.Sprintf("`%s` crd present in bundle `%s` not defined in csv", crd, bundle.Name), crd))
-		}
+	for crdName := range crdNames {
+		result.Add(errors.WarnInvalidBundle(fmt.Sprintf("owned CRD %q is present in bundle %q but not defined in CSV", crdName, bundle.Name), crdName))
 	}
 	return result
 }
 
-func getOwnedCustomResourceDefintionNames(csv *operatorsv1alpha1.ClusterServiceVersion) []string {
-	var names []string
+func getOwnedCustomResourceDefintionNames(csv *operatorsv1alpha1.ClusterServiceVersion) (names []string) {
 	for _, ownedCrd := range csv.Spec.CustomResourceDefinitions.Owned {
 		names = append(names, ownedCrd.Name)
 	}
 	return names
 }
 
-func getBundleCRDNames(bundle *registry.Bundle) (map[string]bool, errors.Error) {
+func getBundleCRDNames(bundle *registry.Bundle) (map[string]struct{}, errors.Error) {
 	crds, err := bundle.CustomResourceDefinitions()
 	if err != nil {
-		logrus.Fatal(err)
-		return nil, errors.Error{}
+		return nil, errors.ErrInvalidParse("error getting bundle CRDs", err)
 	}
-	bundleCrdNames := make(map[string]bool)
+	crdNames := map[string]struct{}{}
 	for _, crd := range crds {
-		bundleCrdNames[crd.GetName()] = true
+		crdNames[crd.GetName()] = struct{}{}
 	}
-	return bundleCrdNames, errors.Error{}
+	return crdNames, errors.Error{}
 }

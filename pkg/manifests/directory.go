@@ -1,19 +1,21 @@
 package manifests
 
 import (
+	"fmt"
+
 	internal "github.com/operator-framework/api/pkg/internal"
 	"github.com/operator-framework/api/pkg/validation"
 	"github.com/operator-framework/api/pkg/validation/errors"
 
 	"github.com/operator-framework/operator-registry/pkg/registry"
-	"github.com/sirupsen/logrus"
 )
 
 func GetManifestsDir(dir string) (*registry.PackageManifest, []*registry.Bundle, []errors.ManifestResult) {
 	manifests, err := internal.ManifestsStoreForDir(dir)
 	if err != nil {
-		logrus.Fatal(err)
-		return nil, nil, nil
+		result := errors.ManifestResult{}
+		result.Add(errors.ErrInvalidParse(fmt.Sprintf("parse manifests from %q", dir), err))
+		return nil, nil, []errors.ManifestResult{result}
 	}
 	pkg := manifests.GetPackageManifest()
 	bundles := manifests.GetBundles()
