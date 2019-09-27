@@ -33,12 +33,13 @@ func validateChannels(pkg *registry.PackageManifest) (errs []errors.Error) {
 	if pkg.PackageName == "" {
 		errs = append(errs, errors.ErrInvalidPackageManifest("packageName empty", pkg.PackageName))
 	}
-	if len(pkg.Channels) == 0 {
+	numChannels := len(pkg.Channels)
+	if numChannels == 0 {
 		errs = append(errs, errors.ErrInvalidPackageManifest("channels empty", pkg.PackageName))
 		return errs
 	}
-	if pkg.DefaultChannelName == "" {
-		errs = append(errs, errors.WarnInvalidPackageManifest("default channel not found", pkg.PackageName))
+	if pkg.DefaultChannelName == "" && numChannels > 1 {
+		errs = append(errs, errors.WarnInvalidPackageManifest("default channel is empty but more than one channel exists", pkg.PackageName))
 	}
 
 	seen := map[string]struct{}{}
@@ -54,7 +55,7 @@ func validateChannels(pkg *registry.PackageManifest) (errs []errors.Error) {
 		}
 		seen[c.Name] = struct{}{}
 	}
-	if _, ok := seen[pkg.DefaultChannelName]; !ok && pkg.DefaultChannelName != "" {
+	if _, found := seen[pkg.DefaultChannelName]; pkg.DefaultChannelName != "" && !found {
 		errs = append(errs, errors.ErrInvalidPackageManifest(fmt.Sprintf("default channel %q not found in the list of declared channels", pkg.DefaultChannelName), pkg.PackageName))
 	}
 

@@ -39,7 +39,7 @@ func (vals Validators) Apply(objs ...interface{}) (results []errors.ManifestResu
 	if len(vals) == 1 {
 		return vals[0].GetFuncs(objs...).runP()
 	}
-	queue := make(chan []errors.ManifestResult, 1)
+	queue := make(chan []errors.ManifestResult)
 	wg := &sync.WaitGroup{}
 	wg.Add(len(vals))
 	for _, val := range vals {
@@ -76,14 +76,14 @@ func (funcs ValidatorFuncs) runP() (results []errors.ManifestResult) {
 	wg.Add(len(funcs))
 	for _, validate := range funcs {
 		go func(f ValidatorFunc) {
-			if result := f(); result.HasError() || result.HasWarn() {
-				queue <- result
-			}
+			queue <- f()
 		}(validate)
 	}
 	go func() {
 		for result := range queue {
-			results = append(results, result)
+			if result.HasError() || result.HasWarn() {
+				results = append(results, result)
+			}
 			wg.Done()
 		}
 	}()

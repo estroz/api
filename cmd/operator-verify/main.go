@@ -13,11 +13,7 @@ func main() {
 	rootCmd := &cobra.Command{
 		Use:   "operator-verify",
 		Short: "Operator manifest validation tool",
-		Long: `operator-verify is a CLI tool for the Operator manifest validation
-	library, which provides functions to validate operator manifest bundles `,
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			fmt.Println("Initializing verification CLI tool...")
-		},
+		Long:  `operator-verify is a CLI tool that calls functions in pkg/validation.`,
 	}
 
 	rootCmd.AddCommand(manifests.NewCmd())
