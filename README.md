@@ -1,6 +1,6 @@
 # api
 
-Contains the API definitions used by [Operator Lifecycle Manager][olm] (OLM) and Marketplace
+Contains the API definitions used by [Operator Lifecycle Manager][olm] (OLM) and [Marketplace Operator][marketplace]
 
 ## `pkg/validation`: Operator Manifest Validation
 
@@ -11,6 +11,7 @@ Additionally this package defines a valid Operator [manifests format][registry-m
 This library reports errors and warnings for missing mandatory and optional fields, respectively. It also supports validation of `ClusterServiceVersion` YAML manifests for any data types inconsistent with those in OLM's [`ClusterServiceVersion`][csv-type] type.
 
 [olm]:https://github.com/operator-framework/operator-lifecycle-manager
+[marketplace]:https://github.com/operator-framework/operator-marketplace
 [registry-manifests]:https://github.com/operator-framework/operator-registry/#manifest-format
 [csv]:https://github.com/operator-framework/operator-lifecycle-manager/blob/master/Documentation/design/building-your-csv.md
 [pkg-man]:https://github.com/operator-framework/operator-lifecycle-manager#discovery-catalogs-and-automated-upgrades

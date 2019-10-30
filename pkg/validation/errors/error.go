@@ -15,6 +15,8 @@ type ManifestResult struct {
 	Warnings []Error
 }
 
+// Add appends errs to r in either r.Errors or r.Warnings depending on an
+// error's Level.
 func (r *ManifestResult) Add(errs ...Error) {
 	for _, err := range errs {
 		if err.Level == LevelError {
@@ -25,10 +27,12 @@ func (r *ManifestResult) Add(errs ...Error) {
 	}
 }
 
+// HasError returns true if r has any Errors of Level == LevelError.
 func (r ManifestResult) HasError() bool {
 	return len(r.Errors) != 0
 }
 
+// HasWarn returns true if r has any Errors of Level == LevelWarn.
 func (r ManifestResult) HasWarn() bool {
 	return len(r.Warnings) != 0
 }
@@ -74,11 +78,30 @@ func (e Error) Error() string {
 	return "ErrMessageMissing"
 }
 
+// Level is the severity of an Error.
 type Level string
 
 const (
-	LevelWarn  = "Warning"
+	// LevelWarn is for Errors that should be addressed but do not have to be.
+	LevelWarn = "Warning"
+	// LevelError is for Errors that must be addressed.
 	LevelError = "Error"
+)
+
+// ErrorType defines what the error resulted from.
+type ErrorType string
+
+const (
+	ErrorInvalidCSV               ErrorType = "CSVFileNotValid"
+	ErrorFieldMissing             ErrorType = "FieldNotFound"
+	ErrorUnsupportedType          ErrorType = "FieldTypeNotSupported"
+	ErrorInvalidParse             ErrorType = "ParseError"
+	ErrorIO                       ErrorType = "FileReadError"
+	ErrorFailedValidation         ErrorType = "ValidationFailed"
+	ErrorInvalidOperation         ErrorType = "OperationFailed"
+	ErrorInvalidManifestStructure ErrorType = "ManifestStructureNotValid"
+	ErrorInvalidBundle            ErrorType = "BundleNotValid"
+	ErrorInvalidPackageManifest   ErrorType = "PackageManifestNotValid"
 )
 
 func NewError(t ErrorType, detail, field string, v interface{}) Error {
@@ -88,8 +111,6 @@ func NewError(t ErrorType, detail, field string, v interface{}) Error {
 func NewWarn(t ErrorType, detail, field string, v interface{}) Error {
 	return Error{t, LevelWarn, field, v, detail}
 }
-
-type ErrorType string
 
 func ErrInvalidBundle(detail string, value interface{}) Error {
 	return invalidBundle(LevelError, detail, value)
@@ -211,16 +232,3 @@ func WarnInvalidOperation(detail string, value interface{}) Error {
 func invalidOperation(lvl Level, detail string, value interface{}) Error {
 	return Error{ErrorInvalidOperation, lvl, "", value, detail}
 }
-
-const (
-	ErrorInvalidCSV               ErrorType = "CSVFileNotValid"
-	ErrorFieldMissing             ErrorType = "FieldNotFound"
-	ErrorUnsupportedType          ErrorType = "FieldTypeNotSupported"
-	ErrorInvalidParse             ErrorType = "ParseError"
-	ErrorIO                       ErrorType = "FileReadError"
-	ErrorFailedValidation         ErrorType = "ValidationFailed"
-	ErrorInvalidOperation         ErrorType = "OperationFailed"
-	ErrorInvalidManifestStructure ErrorType = "ManifestStructureNotValid"
-	ErrorInvalidBundle            ErrorType = "BundleNotValid"
-	ErrorInvalidPackageManifest   ErrorType = "PackageManifestNotValid"
-)
