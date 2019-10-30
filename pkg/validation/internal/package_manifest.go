@@ -36,7 +36,7 @@ func validateChannels(pkg *registry.PackageManifest) (errs []errors.Error) {
 		return errs
 	}
 	if pkg.DefaultChannelName == "" && numChannels > 1 {
-		errs = append(errs, errors.WarnInvalidPackageManifest("default channel is empty but more than one channel exists", pkg.PackageName))
+		errs = append(errs, errors.ErrInvalidPackageManifest("default channel is empty but more than one channel exists", pkg.PackageName))
 	}
 
 	seen := map[string]struct{}{}

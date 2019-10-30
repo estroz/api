@@ -8,25 +8,51 @@ import (
 )
 
 func TestValidatePackageManifest(t *testing.T) {
-	channels := []registry.PackageChannel{
-		{Name: "foo", CurrentCSVName: "bar"},
-	}
 	pkgName := "test-package"
-	pkg := registry.PackageManifest{
-		Channels:           channels,
-		DefaultChannelName: "foo",
-		PackageName:        pkgName,
-	}
 
 	cases := []struct {
 		validatorFuncTest
-		operation func(*registry.PackageManifest)
+		pkg *registry.PackageManifest
 	}{
 		{
 			validatorFuncTest{
 				description: "successful validation",
 			},
-			nil,
+			&registry.PackageManifest{
+				Channels: []registry.PackageChannel{
+					{Name: "foo", CurrentCSVName: "bar"},
+				},
+				DefaultChannelName: "foo",
+				PackageName:        "test-package",
+			},
+		},
+		{
+			validatorFuncTest{
+				description: "successful validation no default channel with only one channel",
+			},
+			&registry.PackageManifest{
+				Channels: []registry.PackageChannel{
+					{Name: "foo", CurrentCSVName: "bar"},
+				},
+				PackageName: "test-package",
+			},
+		},
+		{
+			validatorFuncTest{
+				description: "no default channel and more than one channel",
+				wantErr:     true,
+				errors: []errors.Error{
+					errors.ErrInvalidPackageManifest("default channel is empty but more than one channel exists", pkgName),
+				},
+				numErrs: 1,
+			},
+			&registry.PackageManifest{
+				Channels: []registry.PackageChannel{
+					{Name: "foo", CurrentCSVName: "bar"},
+					{Name: "foo2", CurrentCSVName: "baz"},
+				},
+				PackageName: "test-package",
+			},
 		},
 		{
 			validatorFuncTest{
@@ -37,8 +63,27 @@ func TestValidatePackageManifest(t *testing.T) {
 				},
 				numErrs: 1,
 			},
-			func(pkg *registry.PackageManifest) {
-				pkg.DefaultChannelName = "baz"
+			&registry.PackageManifest{
+				Channels: []registry.PackageChannel{
+					{Name: "foo", CurrentCSVName: "bar"},
+				},
+				DefaultChannelName: "baz",
+				PackageName:        "test-package",
+			},
+		},
+		{
+			validatorFuncTest{
+				description: "channels are empty",
+				wantErr:     true,
+				errors: []errors.Error{
+					errors.ErrInvalidPackageManifest("channels empty", pkgName),
+				},
+				numErrs: 1,
+			},
+			&registry.PackageManifest{
+				Channels:           nil,
+				DefaultChannelName: "baz",
+				PackageName:        "test-package",
 			},
 		},
 		{
@@ -50,11 +95,10 @@ func TestValidatePackageManifest(t *testing.T) {
 				},
 				numErrs: 1,
 			},
-			func(pkg *registry.PackageManifest) {
-				pkg.DefaultChannelName = pkg.Channels[0].Name
-				pkg.Channels = make([]registry.PackageChannel, 1)
-				copy(pkg.Channels, channels)
-				pkg.Channels[0].CurrentCSVName = ""
+			&registry.PackageManifest{
+				Channels:           []registry.PackageChannel{{Name: "foo"}},
+				DefaultChannelName: "foo",
+				PackageName:        "test-package",
 			},
 		},
 		{
@@ -66,17 +110,19 @@ func TestValidatePackageManifest(t *testing.T) {
 				},
 				numErrs: 1,
 			},
-			func(pkg *registry.PackageManifest) {
-				pkg.Channels = append(channels, channels...)
+			&registry.PackageManifest{
+				Channels: []registry.PackageChannel{
+					{Name: "foo", CurrentCSVName: "bar"},
+					{Name: "foo", CurrentCSVName: "baz"},
+				},
+				DefaultChannelName: "foo",
+				PackageName:        "test-package",
 			},
 		},
 	}
 
 	for _, c := range cases {
-		if c.operation != nil {
-			c.operation(&pkg)
-		}
-		result := validatePackageManifest(&pkg)
+		result := validatePackageManifest(c.pkg)
 		c.check(t, result)
 	}
 }
