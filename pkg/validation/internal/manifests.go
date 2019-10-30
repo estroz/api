@@ -4,14 +4,13 @@ import (
 	"fmt"
 
 	"github.com/operator-framework/api/pkg/validation/errors"
-	interfaces "github.com/operator-framework/api/pkg/validation/interfaces"
 
 	"github.com/operator-framework/operator-registry/pkg/registry"
 )
 
 type ManifestsValidator struct{}
 
-func (f ManifestsValidator) GetFuncs(objs ...interface{}) (funcs interfaces.ValidatorFuncs) {
+func (f ManifestsValidator) Validate(objs ...interface{}) (results []errors.ManifestResult) {
 	var pkg *registry.PackageManifest
 	bundles := []*registry.Bundle{}
 	for _, obj := range objs {
@@ -25,11 +24,9 @@ func (f ManifestsValidator) GetFuncs(objs ...interface{}) (funcs interfaces.Vali
 		}
 	}
 	if pkg != nil && len(bundles) > 0 {
-		funcs = append(funcs, func() errors.ManifestResult {
-			return validateManifests(pkg, bundles)
-		})
+		results = append(results, validateManifests(pkg, bundles))
 	}
-	return funcs
+	return results
 }
 
 func validateManifests(pkg *registry.PackageManifest, bundles []*registry.Bundle) (result errors.ManifestResult) {

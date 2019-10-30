@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/operator-framework/api/pkg/validation/errors"
-	interfaces "github.com/operator-framework/api/pkg/validation/interfaces"
 	"github.com/operator-framework/operator-registry/pkg/registry"
 
 	operatorsv1alpha1 "github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1"
@@ -19,20 +18,16 @@ import (
 
 type CSVValidator struct{}
 
-func (f CSVValidator) GetFuncs(objs ...interface{}) (funcs interfaces.ValidatorFuncs) {
+func (f CSVValidator) Validate(objs ...interface{}) (results []errors.ManifestResult) {
 	for _, obj := range objs {
 		switch v := obj.(type) {
 		case *operatorsv1alpha1.ClusterServiceVersion:
-			funcs = append(funcs, func() errors.ManifestResult {
-				return validateCSV(v)
-			})
+			results = append(results, validateCSV(v))
 		case *registry.ClusterServiceVersion:
-			funcs = append(funcs, func() errors.ManifestResult {
-				return validateCSVRegistry(v)
-			})
+			results = append(results, validateCSVRegistry(v))
 		}
 	}
-	return funcs
+	return results
 }
 
 func validateCSVRegistry(bcsv *registry.ClusterServiceVersion) (result errors.ManifestResult) {

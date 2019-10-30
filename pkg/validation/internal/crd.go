@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/operator-framework/api/pkg/validation/errors"
-	interfaces "github.com/operator-framework/api/pkg/validation/interfaces"
 
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextv1beta "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -26,16 +25,14 @@ func init() {
 
 type CRDValidator struct{}
 
-func (f CRDValidator) GetFuncs(objs ...interface{}) (funcs interfaces.ValidatorFuncs) {
+func (f CRDValidator) Validate(objs ...interface{}) (results []errors.ManifestResult) {
 	for _, obj := range objs {
 		switch v := obj.(type) {
 		case *apiextv1beta.CustomResourceDefinition:
-			funcs = append(funcs, func() errors.ManifestResult {
-				return validateCRD(v)
-			})
+			results = append(results, validateCRD(v))
 		}
 	}
-	return funcs
+	return results
 }
 
 func validateCRD(crd interface{}) (result errors.ManifestResult) {
