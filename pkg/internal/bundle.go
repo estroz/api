@@ -16,7 +16,7 @@ import (
 // manifestsLoad loads a manifests directory from disk.
 type manifestsLoad struct {
 	dir     string
-	pkg     *registry.PackageManifest
+	pkg     registry.PackageManifest
 	bundles map[string]*registry.Bundle
 }
 
@@ -27,8 +27,8 @@ var _ registry.Load = &manifestsLoad{}
 // l.dir's manifests. Note that this method does not call any functions that
 // use SQL drivers.
 func (l *manifestsLoad) populate() error {
-	dl := sqlite.NewSQLLoaderForDirectory(l, l.dir)
-	if err := dl.Populate(); err != nil {
+	loader := sqlite.NewSQLLoaderForDirectory(l, l.dir)
+	if err := loader.Populate(); err != nil {
 		return errors.Wrapf(err, "error getting bundles from manifests dir %q", l.dir)
 	}
 	return nil
@@ -51,7 +51,7 @@ func (l *manifestsLoad) AddOperatorBundle(bundle *registry.Bundle) error {
 
 // AddOperatorBundle adds the package manifest to l.
 func (l *manifestsLoad) AddPackageChannels(pkg registry.PackageManifest) error {
-	l.pkg = &pkg
+	l.pkg = pkg
 	return nil
 }
 
@@ -60,7 +60,7 @@ func (l *manifestsLoad) AddPackageChannels(pkg registry.PackageManifest) error {
 type ManifestsStore interface {
 	// GetPackageManifest returns the ManifestsStore's registry.PackageManifest.
 	// The returned object is assumed to be valid.
-	GetPackageManifest() *registry.PackageManifest
+	GetPackageManifest() registry.PackageManifest
 	// GetBundles returns the ManifestsStore's set of registry.Bundle. These
 	// bundles are unique by CSV version, since only one operator type should
 	// exist in one manifests dir.
@@ -75,7 +75,7 @@ type ManifestsStore interface {
 
 // manifests implements ManifestsStore
 type manifests struct {
-	pkg     *registry.PackageManifest
+	pkg     registry.PackageManifest
 	bundles map[string]*registry.Bundle
 }
 
@@ -83,20 +83,20 @@ type manifests struct {
 // Each bundle and the package manifest are statically validated, and will
 // return an error if any are not valid.
 func ManifestsStoreForDir(dir string) (ManifestsStore, error) {
-	l := &manifestsLoad{
+	load := &manifestsLoad{
 		dir:     dir,
 		bundles: map[string]*registry.Bundle{},
 	}
-	if err := l.populate(); err != nil {
+	if err := load.populate(); err != nil {
 		return nil, err
 	}
 	return &manifests{
-		pkg:     l.pkg,
-		bundles: l.bundles,
+		pkg:     load.pkg,
+		bundles: load.bundles,
 	}, nil
 }
 
-func (l manifests) GetPackageManifest() *registry.PackageManifest {
+func (l manifests) GetPackageManifest() registry.PackageManifest {
 	return l.pkg
 }
 

@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/operator-framework/api/pkg/manifests"
+	"github.com/operator-framework/api/pkg/validation/errors"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -24,8 +25,14 @@ validation library.`,
 				log.Fatalf("command %s requires exactly one argument", cmd.CommandPath())
 			}
 			_, _, results := manifests.GetManifestsDir(args[0])
-			if len(results) != 0 {
-				fmt.Println(results)
+			nonEmptyResults := []errors.ManifestResult{}
+			for _, result := range results {
+				if result.HasError() || result.HasWarn() {
+					nonEmptyResults = append(nonEmptyResults, result)
+				}
+			}
+			if len(nonEmptyResults) != 0 {
+				fmt.Println(nonEmptyResults)
 				os.Exit(1)
 			}
 		},

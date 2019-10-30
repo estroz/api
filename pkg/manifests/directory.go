@@ -10,12 +10,15 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/registry"
 )
 
-func GetManifestsDir(dir string) (*registry.PackageManifest, []*registry.Bundle, []errors.ManifestResult) {
+// GetManifestsDir parses all bundles and a package manifest from dir, which
+// are returned if found along with any errors or warnings encountered while
+// parsing/validating found manifests.
+func GetManifestsDir(dir string) (registry.PackageManifest, []*registry.Bundle, []errors.ManifestResult) {
 	manifests, err := internal.ManifestsStoreForDir(dir)
 	if err != nil {
 		result := errors.ManifestResult{}
 		result.Add(errors.ErrInvalidParse(fmt.Sprintf("parse manifests from %q", dir), err))
-		return nil, nil, []errors.ManifestResult{result}
+		return registry.PackageManifest{}, nil, []errors.ManifestResult{result}
 	}
 	pkg := manifests.GetPackageManifest()
 	bundles := manifests.GetBundles()
