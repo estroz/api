@@ -59,7 +59,7 @@ type Error struct {
 	Detail string
 }
 
-// Error strut implements the 'error' interface to define custom error formatting.
+// Error implements the 'error' interface to define custom error formatting.
 func (e Error) Error() string {
 	detail := e.Detail
 	if detail != "" {
