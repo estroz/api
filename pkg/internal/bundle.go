@@ -55,6 +55,21 @@ func (l *manifestsLoad) AddPackageChannels(pkg registry.PackageManifest) error {
 	return nil
 }
 
+// AddBundlePackageChannels is a no-op to implement the registry.Load interface.
+func (l *manifestsLoad) AddBundlePackageChannels(manifest registry.PackageManifest, bundle registry.Bundle) error {
+	return nil
+}
+
+// RmPackageName is a no-op to implement the registry.Load interface.
+func (l *manifestsLoad) RmPackageName(packageName string) error {
+	return nil
+}
+
+// ClearNonDefaultBundles is a no-op to implement the registry.Load interface.
+func (l *manifestsLoad) ClearNonDefaultBundles(packageName string) error {
+	return nil
+}
+
 // ManifestsStore knows how to query for an operator's package manifest and
 // related bundles.
 type ManifestsStore interface {
