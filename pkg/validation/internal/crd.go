@@ -6,6 +6,7 @@ import (
 	"github.com/operator-framework/api/pkg/validation/errors"
 
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/install"
 	apiextv1beta "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/validation"
 	"k8s.io/apimachinery/pkg/conversion"
@@ -15,12 +16,7 @@ import (
 var Scheme = scheme.Scheme
 
 func init() {
-	if err := apiextensions.AddToScheme(Scheme); err != nil {
-		panic(err)
-	}
-	if err := apiextv1beta.AddToScheme(Scheme); err != nil {
-		panic(err)
-	}
+	install.Install(Scheme)
 }
 
 type CRDValidator struct{}
