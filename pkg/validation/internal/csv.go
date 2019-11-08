@@ -9,9 +9,11 @@ import (
 	"github.com/operator-framework/api/pkg/validation/errors"
 	"github.com/operator-framework/operator-registry/pkg/registry"
 
+	"github.com/blang/semver"
 	operatorsv1alpha1 "github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
@@ -41,6 +43,15 @@ func validateCSVRegistry(bcsv *registry.ClusterServiceVersion) (result errors.Ma
 // Iterates over the given CSV. Returns a ManifestResult type object.
 func validateCSV(csv *operatorsv1alpha1.ClusterServiceVersion) errors.ManifestResult {
 	result := errors.ManifestResult{Name: csv.GetName()}
+	// Ensure CSV names are of the correct format.
+	if _, err := parseNameVersion(csv); err != (errors.Error{}) {
+		result.Add(err)
+	}
+	if csv.Spec.Replaces != "" {
+		if _, err := parseReplacesVersion(csv); err != (errors.Error{}) {
+			result.Add(err)
+		}
+	}
 	// validate example annotations ("alm-examples", "olm.examples").
 	result.Add(validateExamplesAnnotations(csv)...)
 	// validate installModes
@@ -48,6 +59,37 @@ func validateCSV(csv *operatorsv1alpha1.ClusterServiceVersion) errors.ManifestRe
 	// check missing optional/mandatory fields.
 	result.Add(checkFields(csv)...)
 	return result
+}
+
+func parseCSVNameFormat(name string) (string, semver.Version, error) {
+	splitName := strings.SplitN(name, ".", 2)
+	if len(splitName) != 2 {
+		return "", semver.Version{}, fmt.Errorf("%q must have format: {operator name}.vX.Y.Z", name)
+	}
+	if violations := k8svalidation.IsDNS1123Subdomain(splitName[0]); len(violations) != 0 {
+		return "", semver.Version{}, fmt.Errorf("%q is invalid:\n%s", splitName[0], violations)
+	}
+	nameVer, err := semver.Parse(splitName[1])
+	if err != nil {
+		return "", semver.Version{}, fmt.Errorf("%q contains an invalid semver %q", name, splitName[1])
+	}
+	return splitName[0], nameVer, errors.Error{}
+}
+
+func parseCSVNameVersion(name, fieldPath, csvName string) (semver.Version, errors.Error) {
+	_, replacesVer, err := parseCSVNameFormat(name)
+	if err != nil {
+		return semver.Version{}, errors.ErrInvalidCSV(fmt.Sprintf("%s %s", fieldPath, err), csvName)
+	}
+	return replacesVer, errors.Error{}
+}
+
+func parseNameVersion(csv *operatorsv1alpha1.ClusterServiceVersion) (semver.Version, errors.Error) {
+	return parseCSVNameVersion(csv.GetName(), "metadata.name", csv.GetName())
+}
+
+func parseReplacesVersion(csv *operatorsv1alpha1.ClusterServiceVersion) (semver.Version, errors.Error) {
+	return parseCSVNameVersion(csv.Spec.Replaces, "spec.replaces", csv.GetName())
 }
 
 // checkFields runs checkMissingFields and returns its errors.

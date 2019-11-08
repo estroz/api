@@ -26,7 +26,7 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/groupcache v0.0.0-20191027212112-611e8accdfc9 // indirect
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
-	github.com/operator-framework/operator-lifecycle-manager v0.0.0-20190725173916-b56e63a643cc
+	github.com/operator-framework/operator-lifecycle-manager v0.0.0-20190926160646-a61144936680
 	github.com/operator-framework/operator-registry v1.5.3
 	github.com/pkg/errors v0.8.1
 	github.com/sirupsen/logrus v1.4.2
