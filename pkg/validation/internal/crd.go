@@ -7,7 +7,7 @@ import (
 
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/install"
-	apiextv1beta "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/validation"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -19,19 +19,20 @@ func init() {
 	install.Install(Scheme)
 }
 
-type CRDValidator struct{}
+type crdv1beta1Validator func(*v1beta1.CustomResourceDefinition) errors.ManifestResult
 
-func (f CRDValidator) Validate(objs ...interface{}) (results []errors.ManifestResult) {
+func (f crdv1beta1Validator) Validate(objs ...interface{}) (results []errors.ManifestResult) {
 	for _, obj := range objs {
 		switch v := obj.(type) {
-		case *apiextv1beta.CustomResourceDefinition:
-			results = append(results, validateCRD(v))
+		case *v1beta1.CustomResourceDefinition:
+			results = append(results, f(v))
 		}
 	}
 	return results
 }
 
-func validateCRD(crd interface{}) (result errors.ManifestResult) {
+// Validatev1beta1CRD validates the given v1beta1 CRD object.
+var Validatev1beta1CRD crdv1beta1Validator = func(crd *v1beta1.CustomResourceDefinition) (result errors.ManifestResult) {
 	unversionedCRD := apiextensions.CustomResourceDefinition{}
 	err := Scheme.Converter().Convert(&crd, &unversionedCRD, conversion.SourceToDest, nil)
 	if err != nil {

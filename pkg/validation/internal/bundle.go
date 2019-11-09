@@ -10,19 +10,21 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/registry"
 )
 
-type BundleValidator struct{}
+type bundleValidator func(*registry.Bundle) errors.ManifestResult
 
-func (f BundleValidator) Validate(objs ...interface{}) (results []errors.ManifestResult) {
+func (f bundleValidator) Validate(objs ...interface{}) (results []errors.ManifestResult) {
 	for _, obj := range objs {
 		switch v := obj.(type) {
 		case *registry.Bundle:
-			results = append(results, validateBundle(v))
+			results = append(results, f(v))
 		}
 	}
 	return results
 }
 
-func validateBundle(bundle *registry.Bundle) (result errors.ManifestResult) {
+// ValidateBundle validates the given Bundle, ensuring invariants are followed
+// by Bundle constituents collectively.
+var ValidateBundle bundleValidator = func(bundle *registry.Bundle) (result errors.ManifestResult) {
 	bcsv, err := bundle.ClusterServiceVersion()
 	if err != nil {
 		result.Add(errors.ErrInvalidParse("error getting bundle CSV", err))

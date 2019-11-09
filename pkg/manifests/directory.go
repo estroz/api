@@ -26,6 +26,6 @@ func GetManifestsDir(dir string) (registry.PackageManifest, []*registry.Bundle, 
 	for _, obj := range bundles {
 		objs = append(objs, obj)
 	}
-	results := validation.DefaultValidators().Apply(objs...)
+	results := validation.WithDefaultValidators().Apply(objs...)
 	return pkg, bundles, results
 }

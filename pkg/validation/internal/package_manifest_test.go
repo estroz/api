@@ -12,13 +12,13 @@ func TestValidatePackageManifest(t *testing.T) {
 
 	cases := []struct {
 		validatorFuncTest
-		pkg *registry.PackageManifest
+		pkg registry.PackageManifest
 	}{
 		{
 			validatorFuncTest{
 				description: "successful validation",
 			},
-			&registry.PackageManifest{
+			registry.PackageManifest{
 				Channels: []registry.PackageChannel{
 					{Name: "foo", CurrentCSVName: "bar"},
 				},
@@ -30,7 +30,7 @@ func TestValidatePackageManifest(t *testing.T) {
 			validatorFuncTest{
 				description: "successful validation no default channel with only one channel",
 			},
-			&registry.PackageManifest{
+			registry.PackageManifest{
 				Channels: []registry.PackageChannel{
 					{Name: "foo", CurrentCSVName: "bar"},
 				},
@@ -46,7 +46,7 @@ func TestValidatePackageManifest(t *testing.T) {
 				},
 				numErrs: 1,
 			},
-			&registry.PackageManifest{
+			registry.PackageManifest{
 				Channels: []registry.PackageChannel{
 					{Name: "foo", CurrentCSVName: "bar"},
 					{Name: "foo2", CurrentCSVName: "baz"},
@@ -63,7 +63,7 @@ func TestValidatePackageManifest(t *testing.T) {
 				},
 				numErrs: 1,
 			},
-			&registry.PackageManifest{
+			registry.PackageManifest{
 				Channels: []registry.PackageChannel{
 					{Name: "foo", CurrentCSVName: "bar"},
 				},
@@ -80,7 +80,7 @@ func TestValidatePackageManifest(t *testing.T) {
 				},
 				numErrs: 1,
 			},
-			&registry.PackageManifest{
+			registry.PackageManifest{
 				Channels:           nil,
 				DefaultChannelName: "baz",
 				PackageName:        "test-package",
@@ -95,7 +95,7 @@ func TestValidatePackageManifest(t *testing.T) {
 				},
 				numErrs: 1,
 			},
-			&registry.PackageManifest{
+			registry.PackageManifest{
 				Channels:           []registry.PackageChannel{{Name: "foo"}},
 				DefaultChannelName: "foo",
 				PackageName:        "test-package",
@@ -110,7 +110,7 @@ func TestValidatePackageManifest(t *testing.T) {
 				},
 				numErrs: 1,
 			},
-			&registry.PackageManifest{
+			registry.PackageManifest{
 				Channels: []registry.PackageChannel{
 					{Name: "foo", CurrentCSVName: "bar"},
 					{Name: "foo", CurrentCSVName: "baz"},
@@ -122,7 +122,7 @@ func TestValidatePackageManifest(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		result := validatePackageManifest(c.pkg)
+		result := ValidatePackageManifest(c.pkg)
 		c.check(t, result)
 	}
 }

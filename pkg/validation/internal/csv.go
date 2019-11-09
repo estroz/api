@@ -10,22 +10,20 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/registry"
 
 	"github.com/blang/semver"
-	operatorsv1alpha1 "github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1"
+	"github.com/operator-framework/operator-lifecycle-manager/pkg/api/apis/operators/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
-type CSVValidator struct{}
+type csvv1alpha1Validator func(*v1alpha1.ClusterServiceVersion) errors.ManifestResult
 
-func (f CSVValidator) Validate(objs ...interface{}) (results []errors.ManifestResult) {
+func (f csvv1alpha1Validator) Validate(objs ...interface{}) (results []errors.ManifestResult) {
 	for _, obj := range objs {
 		switch v := obj.(type) {
-		case *operatorsv1alpha1.ClusterServiceVersion:
-			results = append(results, validateCSV(v))
-		case *registry.ClusterServiceVersion:
-			results = append(results, validateCSVRegistry(v))
+		case *v1alpha1.ClusterServiceVersion:
+			results = append(results, f(v))
 		}
 	}
 	return results
@@ -37,11 +35,11 @@ func validateCSVRegistry(bcsv *registry.ClusterServiceVersion) (result errors.Ma
 		result.Add(err)
 		return result
 	}
-	return validateCSV(csv)
+	return Validatev1alpha1CSV(csv)
 }
 
-// Iterates over the given CSV. Returns a ManifestResult type object.
-func validateCSV(csv *operatorsv1alpha1.ClusterServiceVersion) errors.ManifestResult {
+// Validatev1alpha1CSV validates the given v1alpha1 CSV object.
+var Validatev1alpha1CSV csvv1alpha1Validator = func(csv *v1alpha1.ClusterServiceVersion) errors.ManifestResult {
 	result := errors.ManifestResult{Name: csv.GetName()}
 	// Ensure CSV names are of the correct format.
 	if _, err := parseNameVersion(csv); err != (errors.Error{}) {
@@ -84,16 +82,16 @@ func parseCSVNameVersion(name, fieldPath, csvName string) (semver.Version, error
 	return replacesVer, errors.Error{}
 }
 
-func parseNameVersion(csv *operatorsv1alpha1.ClusterServiceVersion) (semver.Version, errors.Error) {
+func parseNameVersion(csv *v1alpha1.ClusterServiceVersion) (semver.Version, errors.Error) {
 	return parseCSVNameVersion(csv.GetName(), "metadata.name", csv.GetName())
 }
 
-func parseReplacesVersion(csv *operatorsv1alpha1.ClusterServiceVersion) (semver.Version, errors.Error) {
+func parseReplacesVersion(csv *v1alpha1.ClusterServiceVersion) (semver.Version, errors.Error) {
 	return parseCSVNameVersion(csv.Spec.Replaces, "spec.replaces", csv.GetName())
 }
 
 // checkFields runs checkMissingFields and returns its errors.
-func checkFields(csv *operatorsv1alpha1.ClusterServiceVersion) (errs []errors.Error) {
+func checkFields(csv *v1alpha1.ClusterServiceVersion) (errs []errors.Error) {
 	result := errors.ManifestResult{}
 	checkMissingFields(&result, reflect.ValueOf(csv), "")
 	return append(result.Errors, result.Warnings...)
@@ -101,7 +99,7 @@ func checkFields(csv *operatorsv1alpha1.ClusterServiceVersion) (errs []errors.Er
 
 // validateExamplesAnnotations compares alm/olm example annotations with provided APIs given
 // by Spec.CustomResourceDefinitions.Owned and Spec.APIServiceDefinitions.Owned.
-func validateExamplesAnnotations(csv *operatorsv1alpha1.ClusterServiceVersion) (errs []errors.Error) {
+func validateExamplesAnnotations(csv *v1alpha1.ClusterServiceVersion) (errs []errors.Error) {
 	annotations := csv.ObjectMeta.GetAnnotations()
 	// Return right away if no examples annotations are found.
 	if len(annotations) == 0 {
@@ -142,7 +140,7 @@ func validateExamplesAnnotations(csv *operatorsv1alpha1.ClusterServiceVersion) (
 	return errs
 }
 
-func getProvidedAPIs(csv *operatorsv1alpha1.ClusterServiceVersion) (provided map[schema.GroupVersionKind]struct{}, errs []errors.Error) {
+func getProvidedAPIs(csv *v1alpha1.ClusterServiceVersion) (provided map[schema.GroupVersionKind]struct{}, errs []errors.Error) {
 	provided = map[schema.GroupVersionKind]struct{}{}
 	for _, owned := range csv.Spec.CustomResourceDefinitions.Owned {
 		parts := strings.SplitN(owned.Name, ".", 2)
@@ -173,13 +171,13 @@ func matchGVKProvidedAPIs(examples map[schema.GroupVersionKind]struct{}, provide
 	return errs
 }
 
-func validateInstallModes(csv *operatorsv1alpha1.ClusterServiceVersion) (errs []errors.Error) {
+func validateInstallModes(csv *v1alpha1.ClusterServiceVersion) (errs []errors.Error) {
 	if len(csv.Spec.InstallModes) == 0 {
 		errs = append(errs, errors.ErrInvalidCSV("install modes not found", csv.GetName()))
 		return errs
 	}
 
-	installModeSet := operatorsv1alpha1.InstallModeSet{}
+	installModeSet := v1alpha1.InstallModeSet{}
 	anySupported := false
 	for _, installMode := range csv.Spec.InstallModes {
 		if _, ok := installModeSet[installMode.Type]; ok {

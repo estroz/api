@@ -8,25 +8,25 @@ import (
 	"github.com/operator-framework/operator-registry/pkg/registry"
 )
 
-type PackageManifestValidator struct{}
+type PackageManifestValidator func(registry.PackageManifest) errors.ManifestResult
 
 func (f PackageManifestValidator) Validate(objs ...interface{}) (results []errors.ManifestResult) {
 	for _, obj := range objs {
 		switch v := obj.(type) {
-		case *registry.PackageManifest:
-			results = append(results, validatePackageManifest(v))
+		case registry.PackageManifest:
+			results = append(results, f(v))
 		}
 	}
 	return results
 }
 
-func validatePackageManifest(pkg *registry.PackageManifest) errors.ManifestResult {
+var ValidatePackageManifest PackageManifestValidator = func(pkg registry.PackageManifest) errors.ManifestResult {
 	result := errors.ManifestResult{Name: pkg.PackageName}
 	result.Add(validateChannels(pkg)...)
 	return result
 }
 
-func validateChannels(pkg *registry.PackageManifest) (errs []errors.Error) {
+func validateChannels(pkg registry.PackageManifest) (errs []errors.Error) {
 	if pkg.PackageName == "" {
 		errs = append(errs, errors.ErrInvalidPackageManifest("packageName empty", pkg.PackageName))
 	}

@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/operator-framework/api/pkg/validation/errors"
 
@@ -11,28 +12,34 @@ import (
 
 const skipPackageAnnotationKey = "olm.skipRange"
 
-type ManifestsValidator struct{}
+type ManifestsValidator func(registry.PackageManifest, []*registry.Bundle) errors.ManifestResult
 
 func (f ManifestsValidator) Validate(objs ...interface{}) (results []errors.ManifestResult) {
-	var pkg *registry.PackageManifest
+	var pkg registry.PackageManifest
 	bundles := []*registry.Bundle{}
 	for _, obj := range objs {
 		switch v := obj.(type) {
-		case *registry.PackageManifest:
-			if pkg == nil {
+		case registry.PackageManifest:
+			if isPkgEmpty(pkg) {
 				pkg = v
 			}
 		case *registry.Bundle:
 			bundles = append(bundles, v)
 		}
 	}
-	if pkg != nil && len(bundles) > 0 {
-		results = append(results, validateManifests(pkg, bundles))
+	if !isPkgEmpty(pkg) && len(bundles) > 0 {
+		results = append(results, f(pkg, bundles))
 	}
 	return results
 }
 
-func validateManifests(pkg *registry.PackageManifest, bundles []*registry.Bundle) (result errors.ManifestResult) {
+func isPkgEmpty(pkg registry.PackageManifest) bool {
+	return reflect.DeepEqual(pkg, registry.PackageManifest{})
+}
+
+// ValidateManifests validates the given pkg and bundles, ensuring invariants
+// are followed by arguments collectively.
+var ValidateManifests ManifestsValidator = func(pkg registry.PackageManifest, bundles []*registry.Bundle) (result errors.ManifestResult) {
 	// Collect all CSV names and ensure no duplicates. We will use these names
 	// to check whether a spec.replaces references an existing CSV in bundles.
 	csvNameMap := map[string]struct{}{}
@@ -192,7 +199,7 @@ func checkReplacesGraphForCycles(graph map[string]string) (errs []errors.Error) 
 
 // checkChannelInBundle ensures that each package channel's currentCSV exists
 // in one bundle.
-func checkChannelInBundle(pkg *registry.PackageManifest, csvNames map[string]string) (errs []errors.Error) {
+func checkChannelInBundle(pkg registry.PackageManifest, csvNames map[string]string) (errs []errors.Error) {
 	for _, channel := range pkg.Channels {
 		if _, csvExists := csvNames[channel.CurrentCSVName]; !csvExists {
 			errs = append(errs, errors.ErrInvalidPackageManifest(
