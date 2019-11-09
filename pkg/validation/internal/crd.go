@@ -38,7 +38,7 @@ func validateCRD(crd interface{}) (result errors.ManifestResult) {
 		result.Add(errors.ErrInvalidParse("error converting versioned crd to unversioned crd", err))
 		return result
 	}
-	result = validateCRD(&unversionedCRD)
+	result = validateCRDUnversioned(&unversionedCRD)
 	result.Name = unversionedCRD.GetName()
 	return result
 }
